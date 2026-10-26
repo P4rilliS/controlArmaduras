@@ -301,7 +301,7 @@ const FormularioRegistro = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-amber-50/80 p-3.5 rounded-xl border border-amber-200">
                 <span className="text-xs font-bold uppercase text-amber-700 block">
-                  Encargado del Turno (Responsable)
+                  Encargado de la Maquina (Responsable)
                 </span>
                 <p className="text-base sm:text-lg font-extrabold text-slate-900 mt-0.5 flex items-center gap-1.5">
                   <UserCheck className="w-5 h-5 text-amber-600 shrink-0" />
@@ -400,7 +400,7 @@ const FormularioRegistro = ({
                 htmlFor="campo-encargado"
                 className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-amber-900 mb-1.5"
               >
-                Encargado del Turno (Obligatorio) *
+                Encargado de la Maquina *
               </label>
               <select
                 id="campo-encargado"
@@ -409,7 +409,7 @@ const FormularioRegistro = ({
                 required
                 className="w-full min-h-[50px] rounded-xl border-2 border-amber-300 bg-white px-4 py-3 text-base sm:text-lg font-bold text-slate-900 focus:border-amber-600 focus:outline-none cursor-pointer"
               >
-                <option value="">-- Seleccione al Encargado del Turno --</option>
+                <option value="">-- Seleccione al Encargado de la Maquina --</option>
                 {opcionesParaEncargado.map((nombre) => (
                   <option key={nombre} value={nombre}>
                     {nombre}
@@ -425,7 +425,7 @@ const FormularioRegistro = ({
                   htmlFor="campo-acompanante-1"
                   className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-600 mb-1.5"
                 >
-                  Acompañante 1 (Opcional)
+                  Anillado (Opcional)
                 </label>
                 <select
                   id="campo-acompanante-1"
@@ -447,7 +447,7 @@ const FormularioRegistro = ({
                   htmlFor="campo-acompanante-2"
                   className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-600 mb-1.5"
                 >
-                  Acompañante 2 (Opcional)
+                  Estabilizado (Opcional)
                 </label>
                 <select
                   id="campo-acompanante-2"
