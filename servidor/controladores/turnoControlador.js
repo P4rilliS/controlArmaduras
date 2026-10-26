@@ -47,7 +47,7 @@ const NOMINA_TRABAJADORES = Turno.NOMINA_TRABAJADORES || [
 ];
 
 // Tarifas oficiales de pago por producción en planta (USD)
-const TARIFA_MAQUINA = 0.45;
+const TARIFA_MAQUINA = 0.35;
 const TARIFA_ESTABILIZADA = 0.30;
 
 /**
