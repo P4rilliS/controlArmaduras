@@ -1045,7 +1045,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                       </div>
                                       <div className="flex items-center gap-3 text-xs font-bold">
                                         <span className="text-slate-300">
-                                          Tarifas: Máquina $0.45 | Estabilizado $0.30
+                                          Tarifas: Máquina $0.35 | Estabilizado $0.30
                                         </span>
                                         <span className="bg-emerald-500 text-slate-950 font-black px-3 py-1 rounded-full">
                                           Total Mano de Obra: {formatearMonedaUSD(liquidacion.totalNominaTurno)}
