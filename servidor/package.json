@@ -1,0 +1,31 @@
+{
+  "name": "control-armaduras-servidor",
+  "version": "1.0.0",
+  "description": "Servidor backend API REST para el control diario de producción e inventario de armaduras",
+  "main": "index.js",
+  "scripts": {
+    "inicio": "node index.js",
+    "desarrollo": "node --watch index.js",
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "armaduras",
+    "produccion",
+    "inventario",
+    "planta-industrial",
+    "mern"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.3",
+    "mongoose": "^8.24.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  },
+  "type": "commonjs"
+}

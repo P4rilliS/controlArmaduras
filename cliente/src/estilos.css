@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    touch-action: manipulation;
+  }
+
+  /* Mejorar visibilidad y tamaño táctil de controles en tablets industriales */
+  input,
+  select,
+  textarea,
+  button {
+    font-size: 1rem;
+  }
+}
+

@@ -1,0 +1,29 @@
+{
+  "name": "control-armaduras-cliente",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Interfaz web industrial para el control y registro diario de producción e inventario de armaduras",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "desarrollo": "vite",
+    "build": "vite build",
+    "compilar": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^0.441.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-basic-ssl": "^1.2.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.45",
+    "tailwindcss": "^3.4.11",
+    "vite": "^5.4.3"
+  }
+}

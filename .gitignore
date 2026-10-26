@@ -1,0 +1,18 @@
+# Dependencias
+node_modules/
+servidor/node_modules/
+cliente/node_modules/
+
+# Compilaciones
+cliente/dist/
+
+# Variables de entorno reales
+.env
+servidor/.env
+cliente/.env
+
+# Registros y sistema
+*.log
+.DS_Store
+Thumbs.db
+

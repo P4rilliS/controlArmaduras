@@ -1,0 +1,33 @@
+{
+  "id": "/",
+  "name": "Control de Producción de Armaduras",
+  "short_name": "Armaduras",
+  "description": "Aplicación industrial para el control y registro diario por turnos de producción e inventario de armaduras",
+  "lang": "es-ES",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1d4ed8",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/iconos/icono-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/iconos/icono-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/iconos/icono.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
