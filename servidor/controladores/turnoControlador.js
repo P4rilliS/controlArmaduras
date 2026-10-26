@@ -122,6 +122,7 @@ const calcularLiquidacionTurno = ({
  */
 const formatearHoraServidor = (fecha = new Date()) => {
   return fecha.toLocaleTimeString('es-VE', {
+    timeZone: 'America/Caracas',
     hour: '2-digit',
     minute: '2-digit',
     hour12: true
