@@ -382,7 +382,7 @@ const ResumenTotalesFiltro = ({
                     <tr>
                       <th className="py-3 px-4">Nombre del Trabajador</th>
                       <th className="py-3 px-4 text-center">Turnos Trabajados</th>
-                      <th className="py-3 px-4 text-right">Armaduras Máquina ($0.45)</th>
+                      <th className="py-3 px-4 text-right">Armaduras Máquina ($0.35)</th>
                       <th className="py-3 px-4 text-right">Armaduras Estabilizadas ($0.30)</th>
                       <th className="py-3 px-4 text-right">Total Armaduras Liquidadas</th>
                       <th className="py-3 px-4 text-right">Monto Total a Transferir ($ USD)</th>
