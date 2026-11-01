@@ -98,11 +98,11 @@ const ModalSupervisor = ({ abierto, alCerrar, alAutenticar, cargando }) => {
                 }}
                 className="w-full min-h-[52px] pl-12 pr-4 py-3 rounded-xl border-2 border-slate-300 text-center text-2xl font-black tracking-widest text-slate-900 focus:border-amber-500 focus:outline-none"
               />
-            {/* </div>
-            <p className="text-xs text-slate-400 text-center mt-1.5">
+            </div>
+            {/* <p className="text-xs text-slate-400 text-center mt-1.5">
               Clave predeterminada en entorno de desarrollo: <strong>1234</strong>
-            </p>
-          </div> */}
+            </p> */}
+          </div>
 
           {/* Teclado Numérico Táctil para Teléfonos y Tablets */}
           <div className="grid grid-cols-3 gap-2.5">
