@@ -230,7 +230,7 @@ const ResumenTotalesFiltro = ({
               <span className="text-sm font-bold text-slate-500">uds.</span>
             </p>
             <span className="text-xs font-semibold text-slate-500 mt-1 block">
-              Suma de máquina en turnos filtrados ($0.45/ud.)
+              Suma de máquina en turnos filtrados ($0.35/ud.)
             </span>
           </div>
 
@@ -338,7 +338,7 @@ const ResumenTotalesFiltro = ({
 
                     <div className="grid grid-cols-3 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center">
                       <div>
-                        <span className="text-slate-500 font-bold block">Máquina ($0.45)</span>
+                        <span className="text-slate-500 font-bold block">Máquina ($0.35)</span>
                         <span className="font-black text-slate-800">
                           {trabajador.armadurasMaquina.toLocaleString('es-ES')} uds.
                         </span>
