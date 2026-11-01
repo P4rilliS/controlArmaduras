@@ -212,18 +212,23 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
   };
 
   const aplicarFiltroSemanaCorte = () => {
-    const hoy = new Date();
-    // Semana de corte de nómina: desde el sábado hasta el viernes de la semana actual
-    const diasDesdeSabado = (hoy.getDay() + 1) % 7;
-    const sabadoInicio = new Date(hoy);
-    sabadoInicio.setDate(hoy.getDate() - diasDesdeSabado);
-    const viernesFin = new Date(sabadoInicio);
-    viernesFin.setDate(sabadoInicio.getDate() + 6);
+  const hoy = new Date();
+  // Semana de corte de nómina: desde el viernes hasta el jueves de la semana en curso
+  const diasDesdeViernes = (hoy.getDay() + 2) % 7;
 
-    setFechaInicio(obtenerFechaLocalISO(sabadoInicio));
-    setFechaFin(obtenerFechaLocalISO(viernesFin));
-    setCicloSeleccionado('Semana de Corte (Sáb - Vie)');
-  };
+  // Fecha de inicio: viernes más reciente (o hoy si es viernes)
+  const viernesInicio = new Date(hoy);
+  viernesInicio.setDate(hoy.getDate() - diasDesdeViernes);
+
+  // Fecha de fin: 6 días después (jueves de cierre)
+  const juevesFin = new Date(viernesInicio);
+  juevesFin.setDate(viernesInicio.getDate() + 6);
+
+  setFechaInicio(obtenerFechaLocalISO(viernesInicio));
+  setFechaFin(obtenerFechaLocalISO(juevesFin));
+  setCicloSeleccionado('Semana de Corte (Vie - Jue)');
+};
+
 
   const aplicarFiltroSemana = () => {
     const hoy = new Date();
