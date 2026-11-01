@@ -531,7 +531,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
               onClick={aplicarFiltroSemanaCorte}
               className="min-h-[44px] px-3 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-extrabold text-xs sm:text-sm transition cursor-pointer"
             >
-              Semana de Corte (Sáb-Vie)
+              Semana de Corte (Vie-Jue)
             </button>
             <button
               type="button"
