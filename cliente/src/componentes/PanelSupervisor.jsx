@@ -3,7 +3,6 @@ import {
   BarChart3,
   Download,
   Filter,
-  Eye,
   ChevronDown,
   ChevronUp,
   Gauge,
@@ -247,7 +246,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
     setCicloSeleccionado('Todos los registros');
   };
 
-  const alternarDetalleTurno = (idTurno) => {
+  const toggleDetalleTurno = (idTurno) => {
     setTurnoExpandidoId((actual) => (actual === idTurno ? null : idTurno));
   };
 
@@ -270,7 +269,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
   };
 
   return (
-    <div className="space-y-5 w-full">
+    <div className="space-y-5 w-full max-w-full overflow-hidden">
       {/* Encabezado de Supervisión y Exportación a Excel */}
       <div className="bg-slate-900 text-white p-4 sm:p-6 rounded-2xl shadow-lg border-l-8 border-amber-500 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -631,7 +630,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
       {/* =====================================================================
           5. HISTORIAL DE TURNOS (TARJETAS EN MÓVIL / TABLA EN ESCRITORIO)
          ===================================================================== */}
-      <section className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden w-full">
+      <section className="bg-white rounded-2xl shadow-md border border-slate-200 w-full max-w-full overflow-hidden">
         <div className="bg-slate-900 text-white px-4 sm:px-6 py-4 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
             <BarChart3 className="w-5 h-5 text-amber-400 shrink-0" />
@@ -655,8 +654,8 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
           </div>
         ) : (
           <>
-            {/* VISTA MÓVIL: Tarjetas ("Cards") compactas por turno */}
-            <div className="block md:hidden divide-y divide-slate-200">
+            {/* VISTA MÓVIL: Tarjetas ("Cards") compactas e interactivas por turno */}
+            <div className="block md:hidden divide-y divide-slate-200 w-full max-w-full overflow-hidden">
               {turnosFiltrados.map((turno) => {
                 const expandido = turnoExpandidoId === turno._id;
                 const parciales = turno.registrosParciales || [];
@@ -665,222 +664,221 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                   turno.estado === 'Cerrado' ? calcularLiquidacionTurnoCliente(turno) : null;
 
                 return (
-                  <div key={turno._id} className="p-4 space-y-3.5">
-                    {/* Cabecera de la tarjeta */}
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-base text-slate-900">
-                          {formatearFechaLegible(turno.fecha)}
-                        </span>
-                        <span
-                          className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-extrabold ${
-                            turno.tipoTurno === 'Primer Turno'
-                              ? 'bg-amber-100 text-amber-900'
-                              : 'bg-sky-100 text-sky-900'
-                          }`}
-                        >
-                          {turno.tipoTurno}
-                        </span>
-                      </div>
-
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold ${
-                          turno.estado === 'Cerrado'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {turno.estado === 'Cerrado' ? (
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                        ) : (
-                          <Clock className="w-3.5 h-3.5" />
-                        )}
-                        {turno.estado}
-                      </span>
-                    </div>
-
-                    {/* Personal del turno */}
-                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-sm">
-                      <div className="font-extrabold text-slate-900">
-                        Encargado: <span className="text-amber-700">{turno.encargado}</span>
-                      </div>
-                      <div className="text-xs text-slate-600 mt-0.5">
-                        {acompanantes.length > 0
-                          ? `Acompañantes: ${acompanantes.join(' · ')}`
-                          : 'Sin acompañantes (Trabaja solo)'}
-                      </div>
-                    </div>
-
-                    {/* Marcas de tiempo de Apertura, Cierre y Duración del Turno */}
-                    <div className="bg-slate-900 text-white p-3 rounded-xl grid grid-cols-3 gap-2 text-center">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                          Hora Apertura
-                        </span>
-                        <span className="text-xs font-black text-emerald-400">
-                          {turno.horaApertura || '--:--'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                          Hora Cierre
-                        </span>
-                        <span className="text-xs font-black text-amber-400">
-                          {turno.estado === 'Cerrado'
-                            ? turno.horaCierre || '--:--'
-                            : 'En curso'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                          Trabajado
-                        </span>
-                        <span className="text-xs font-black text-sky-300">
-                          {calcularDuracionTurno(turno)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Grilla de métricas del turno incluyendo Costo de Mano de Obra ($) */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                      <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200">
-                        <span className="text-[10px] font-bold uppercase text-emerald-800 block">
-                          Estabilizadas
-                        </span>
-                        <span className="text-base font-black text-emerald-700">
-                          {Number(turno.totalEstabilizadas || 0).toLocaleString('es-ES')}
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-100 p-2.5 rounded-xl border border-slate-200">
-                        <span className="text-[10px] font-bold uppercase text-slate-500 block">
-                          Máquina
-                        </span>
-                        <span className="text-base font-black text-slate-800">
-                          {turno.estado === 'Cerrado'
-                            ? Number(turno.contadorMaquina || 0).toLocaleString('es-ES')
-                            : 'En curso'}
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-100 p-2.5 rounded-xl border border-slate-200">
-                        <span className="text-[10px] font-bold uppercase text-slate-500 block">
-                          Diferencia
-                        </span>
-                        <span className="text-base font-black text-amber-700">
-                          {turno.estado === 'Cerrado'
-                            ? turno.diferencia > 0
-                              ? `+${turno.diferencia}`
-                              : turno.diferencia
-                            : '--'}
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-900 text-white p-2.5 rounded-xl border border-slate-800">
-                        <span className="text-[10px] font-bold uppercase text-emerald-400 block">
-                          Mano de Obra ($)
-                        </span>
-                        <span className="text-base font-black text-emerald-400">
-                          {turno.estado === 'Cerrado' && liquidacion
-                            ? formatearMonedaUSD(liquidacion.totalNominaTurno)
-                            : 'En curso'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Botón táctil para ver detalle de liquidación y entregas hora a hora */}
-                    <button
-                      type="button"
-                      onClick={() => alternarDetalleTurno(turno._id)}
-                      className="w-full min-h-[48px] px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+                  <div key={turno._id} className="w-full max-w-full overflow-hidden">
+                    {/* Fila / Tarjeta completa cliqueable */}
+                    <div
+                      onClick={() => toggleDetalleTurno(turno._id)}
+                      className="cursor-pointer hover:bg-slate-50/80 transition-colors select-none p-4 space-y-3.5"
+                      title="Haz clic para ver/ocultar el detalle del turno"
                     >
-                      <Eye className="w-4 h-4 text-amber-400" />
-                      <span>
-                        {expandido
-                          ? 'Ocultar Liquidación y Detalle'
-                          : `Ver Liquidación ($) y Horas (${parciales.length} entregas)`}
-                      </span>
-                      {expandido ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                    </button>
+                      {/* Cabecera de la tarjeta */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-base text-slate-900">
+                            {formatearFechaLegible(turno.fecha)}
+                          </span>
+                          <span
+                            className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-extrabold ${
+                              turno.tipoTurno === 'Primer Turno'
+                                ? 'bg-amber-100 text-amber-900'
+                                : 'bg-sky-100 text-sky-900'
+                            }`}
+                          >
+                            {turno.tipoTurno}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold ${
+                              turno.estado === 'Cerrado'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {turno.estado === 'Cerrado' ? (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            ) : (
+                              <Clock className="w-3.5 h-3.5" />
+                            )}
+                            {turno.estado}
+                          </span>
+                          {expandido ? (
+                            <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Personal del turno */}
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-sm">
+                        <div className="font-extrabold text-slate-900">
+                          Encargado: <span className="text-amber-700">{turno.encargado}</span>
+                        </div>
+                        <div className="text-xs text-slate-600 mt-0.5">
+                          {acompanantes.length > 0
+                            ? `Acompañantes: ${acompanantes.join(' · ')}`
+                            : 'Sin acompañantes (Trabaja solo)'}
+                        </div>
+                      </div>
+
+                      {/* Marcas de tiempo de Apertura, Cierre y Duración del Turno */}
+                      <div className="bg-slate-900 text-white p-3 rounded-xl grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                            Hora Apertura
+                          </span>
+                          <span className="text-xs font-black text-emerald-400">
+                            {turno.horaApertura || '--:--'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                            Hora Cierre
+                          </span>
+                          <span className="text-xs font-black text-amber-400">
+                            {turno.estado === 'Cerrado'
+                              ? turno.horaCierre || '--:--'
+                              : 'En curso'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                            Trabajado
+                          </span>
+                          <span className="text-xs font-black text-sky-300">
+                            {calcularDuracionTurno(turno)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Grilla de métricas del turno incluyendo Costo de Mano de Obra ($) */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                        <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200">
+                          <span className="text-[10px] font-bold uppercase text-emerald-800 block">
+                            Estabilizadas
+                          </span>
+                          <span className="text-base font-black text-emerald-700">
+                            {Number(turno.totalEstabilizadas || 0).toLocaleString('es-ES')}
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-100 p-2.5 rounded-xl border border-slate-200">
+                          <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                            Máquina
+                          </span>
+                          <span className="text-base font-black text-slate-800">
+                            {turno.estado === 'Cerrado'
+                              ? Number(turno.contadorMaquina || 0).toLocaleString('es-ES')
+                              : 'En curso'}
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-100 p-2.5 rounded-xl border border-slate-200">
+                          <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                            Diferencia
+                          </span>
+                          <span className="text-base font-black text-amber-700">
+                            {turno.estado === 'Cerrado'
+                              ? turno.diferencia > 0
+                                ? `+${turno.diferencia}`
+                                : turno.diferencia
+                              : '--'}
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-900 text-white p-2.5 rounded-xl border border-slate-800">
+                          <span className="text-[10px] font-bold uppercase text-emerald-400 block">
+                            Mano de Obra ($)
+                          </span>
+                          <span className="text-base font-black text-emerald-400">
+                            {turno.estado === 'Cerrado' && liquidacion
+                              ? formatearMonedaUSD(liquidacion.totalNominaTurno)
+                              : 'En curso'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
 
                     {/* Desglose de liquidación individual y hora a hora dentro de la tarjeta móvil */}
                     {expandido && (
-                      <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 space-y-3">
-                        {/* Desglose individual por trabajador */}
-                        {turno.estado === 'Cerrado' && liquidacion && (
-                          <div className="bg-white rounded-xl border border-emerald-300 overflow-hidden">
-                            <div className="bg-slate-900 text-white px-3 py-2 flex items-center justify-between text-xs font-extrabold">
-                              <span className="flex items-center gap-1.5">
-                                <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                                Desglose de Pago por Trabajador
-                              </span>
-                              <span className="text-emerald-400">
-                                Total: {formatearMonedaUSD(liquidacion.totalNominaTurno)}
-                              </span>
-                            </div>
-                            <div className="divide-y divide-slate-100">
-                              {liquidacion.pagosPersonal.map((pago, idx) => (
-                                <div
-                                  key={`${pago.nombre}-${idx}`}
-                                  className="p-2.5 flex items-center justify-between gap-2 text-xs"
-                                >
-                                  <div>
-                                    <span className="font-extrabold text-slate-900">
-                                      {pago.nombre}
-                                    </span>{' '}
-                                    <span className="font-bold text-slate-500">
-                                      ({pago.rol} · {pago.concepto})
-                                    </span>
-                                    <span className="block text-[11px] text-slate-500">
-                                      {pago.detalleBase}
+                      <div className="px-4 pb-4 w-full max-w-full overflow-hidden">
+                        <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 space-y-3 w-full max-w-full overflow-hidden">
+                          {/* Desglose individual por trabajador */}
+                          {turno.estado === 'Cerrado' && liquidacion && (
+                            <div className="bg-white rounded-xl border border-emerald-300 w-full max-w-full overflow-hidden">
+                              <div className="bg-slate-900 text-white px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs font-extrabold">
+                                <span className="flex items-center gap-1.5">
+                                  <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                                  Desglose de Pago por Trabajador
+                                </span>
+                                <span className="text-emerald-400">
+                                  Total: {formatearMonedaUSD(liquidacion.totalNominaTurno)}
+                                </span>
+                              </div>
+                              <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-3 p-2.5">
+                                {liquidacion.pagosPersonal.map((pago, idx) => (
+                                  <div
+                                    key={`${pago.nombre}-${idx}`}
+                                    className="p-2.5 rounded-lg border border-slate-100 flex items-center justify-between gap-2 text-xs min-w-0"
+                                  >
+                                    <div className="min-w-0">
+                                      <span className="font-extrabold text-slate-900">
+                                        {pago.nombre}
+                                      </span>{' '}
+                                      <span className="font-bold text-slate-500">
+                                        ({pago.rol} · {pago.concepto})
+                                      </span>
+                                      <span className="block text-[11px] text-slate-500">
+                                        {pago.detalleBase}
+                                      </span>
+                                    </div>
+                                    <span className="font-black text-sm text-emerald-700 shrink-0">
+                                      {formatearMonedaUSD(pago.montoPagar)}
                                     </span>
                                   </div>
-                                  <span className="font-black text-sm text-emerald-700 shrink-0">
-                                    {formatearMonedaUSD(pago.montoPagar)}
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="text-xs font-extrabold uppercase text-slate-500 pt-1">
+                            Entregas Parciales Hora por Hora ({parciales.length})
+                          </div>
+
+                          {parciales.length === 0 ? (
+                            <p className="text-xs text-slate-500 italic text-center py-2">
+                              No se registraron lotes parciales en este turno.
+                            </p>
+                          ) : (
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 w-full">
+                              {parciales.map((lote, idx) => (
+                                <div
+                                  key={lote._id || idx}
+                                  className="p-2.5 rounded-lg bg-white border border-slate-200 flex items-center justify-between gap-2 min-w-0"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <span className="text-xs font-black text-slate-500">
+                                        Lote #{idx + 1}
+                                      </span>
+                                      <span className="text-xs font-extrabold bg-slate-100 text-slate-800 px-2 py-0.5 rounded">
+                                        {lote.hora}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-slate-600 mt-1 break-words">
+                                      {lote.observacion || 'Sin observaciones'}
+                                    </p>
+                                  </div>
+                                  <span className="text-sm font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg shrink-0">
+                                    +{lote.cantidad}
                                   </span>
                                 </div>
                               ))}
                             </div>
-                          </div>
-                        )}
-
-                        <div className="text-xs font-extrabold uppercase text-slate-500 pt-1">
-                          Entregas Parciales Hora por Hora ({parciales.length})
+                          )}
                         </div>
-
-                        {parciales.length === 0 ? (
-                          <p className="text-xs text-slate-500 italic text-center py-2">
-                            No se registraron lotes parciales en este turno.
-                          </p>
-                        ) : (
-                          parciales.map((lote, idx) => (
-                            <div
-                              key={lote._id || idx}
-                              className="p-2.5 rounded-lg bg-white border border-slate-200 flex items-center justify-between gap-2"
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-black text-slate-500">
-                                    Lote #{idx + 1}
-                                  </span>
-                                  <span className="text-xs font-extrabold bg-slate-100 text-slate-800 px-2 py-0.5 rounded">
-                                    {lote.hora}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-slate-600 mt-1 break-words">
-                                  {lote.observacion || 'Sin observaciones'}
-                                </p>
-                              </div>
-                              <span className="text-sm font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg shrink-0">
-                                +{lote.cantidad}
-                              </span>
-                            </div>
-                          ))
-                        )}
                       </div>
                     )}
                   </div>
@@ -888,22 +886,21 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
               })}
             </div>
 
-            {/* VISTA TABLET / ESCRITORIO: Tabla tradicional envuelta en overflow-x-auto */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+            {/* VISTA TABLET / ESCRITORIO: Tabla sin desbordamiento horizontal y con filas cliqueables */}
+            <div className="hidden md:block w-full max-w-full overflow-hidden">
+              <table className="w-full max-w-full text-left border-collapse">
                 <thead className="bg-slate-100 text-slate-600 text-xs font-extrabold uppercase tracking-wider border-b border-slate-200">
                   <tr>
-                    <th className="py-3.5 px-4">Fecha</th>
-                    <th className="py-3.5 px-4">Turno</th>
-                    <th className="py-3.5 px-4">Apertura / Cierre</th>
-                    <th className="py-3.5 px-4">Encargado y Equipo</th>
-                    <th className="py-3.5 px-4 text-center">Entregas</th>
-                    <th className="py-3.5 px-4 text-right">Estabilizadas</th>
-                    <th className="py-3.5 px-4 text-right">Máquina</th>
-                    <th className="py-3.5 px-4 text-right">Diferencia</th>
-                    <th className="py-3.5 px-4 text-right">Costo de Mano de Obra ($)</th>
-                    <th className="py-3.5 px-4 text-center">Estado</th>
-                    <th className="py-3.5 px-4 text-center">Detalle y Pagos</th>
+                    <th className="py-3.5 px-3 lg:px-4">Fecha</th>
+                    <th className="py-3.5 px-3 lg:px-4">Turno</th>
+                    <th className="py-3.5 px-3 lg:px-4">Apertura / Cierre</th>
+                    <th className="py-3.5 px-3 lg:px-4">Encargado y Equipo</th>
+                    <th className="py-3.5 px-3 lg:px-4 text-center">Entregas</th>
+                    <th className="py-3.5 px-3 lg:px-4 text-right">Estabilizadas</th>
+                    <th className="py-3.5 px-3 lg:px-4 text-right">Máquina</th>
+                    <th className="py-3.5 px-3 lg:px-4 text-right">Diferencia</th>
+                    <th className="py-3.5 px-3 lg:px-4 text-right">Costo de Mano de Obra ($)</th>
+                    <th className="py-3.5 px-3 lg:px-4 text-center">Estado</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-sm">
@@ -915,11 +912,17 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
 
                     return (
                       <React.Fragment key={turno._id}>
-                        <tr className="hover:bg-slate-50 transition">
-                          <td className="py-4 px-4 font-bold text-slate-800 whitespace-nowrap">
+                        <tr
+                          onClick={() => toggleDetalleTurno(turno._id)}
+                          className={`cursor-pointer hover:bg-slate-50/80 transition-colors select-none ${
+                            expandido ? 'bg-slate-50/80' : ''
+                          }`}
+                          title="Haz clic para ver/ocultar el detalle del turno"
+                        >
+                          <td className="py-4 px-3 lg:px-4 font-bold text-slate-800 whitespace-nowrap">
                             {formatearFechaLegible(turno.fecha)}
                           </td>
-                          <td className="py-4 px-4 whitespace-nowrap">
+                          <td className="py-4 px-3 lg:px-4 whitespace-nowrap">
                             <span
                               className={`inline-block px-2.5 py-1 rounded-lg text-xs font-extrabold ${
                                 turno.tipoTurno === 'Primer Turno'
@@ -930,7 +933,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                               {turno.tipoTurno}
                             </span>
                           </td>
-                          <td className="py-4 px-4 whitespace-nowrap">
+                          <td className="py-4 px-3 lg:px-4 whitespace-nowrap">
                             <div className="text-xs font-bold text-slate-800">
                               <span className="text-emerald-700">Inicio:</span>{' '}
                               {turno.horaApertura || '--:--'}
@@ -945,7 +948,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                               Duración: {calcularDuracionTurno(turno)}
                             </div>
                           </td>
-                          <td className="py-4 px-4">
+                          <td className="py-4 px-3 lg:px-4">
                             <div className="font-extrabold text-slate-900">
                               {turno.encargado}{' '}
                               <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
@@ -958,18 +961,18 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                 : 'Sin acompañantes (Trabaja solo)'}
                             </div>
                           </td>
-                          <td className="py-4 px-4 text-center font-bold text-slate-700">
+                          <td className="py-4 px-3 lg:px-4 text-center font-bold text-slate-700 whitespace-nowrap">
                             {parciales.length} lotes
                           </td>
-                          <td className="py-4 px-4 text-right font-black text-emerald-700 text-base">
+                          <td className="py-4 px-3 lg:px-4 text-right font-black text-emerald-700 text-base whitespace-nowrap">
                             {Number(turno.totalEstabilizadas || 0).toLocaleString('es-ES')}
                           </td>
-                          <td className="py-4 px-4 text-right font-black text-slate-800">
+                          <td className="py-4 px-3 lg:px-4 text-right font-black text-slate-800 whitespace-nowrap">
                             {turno.estado === 'Cerrado'
                               ? Number(turno.contadorMaquina || 0).toLocaleString('es-ES')
                               : 'En curso'}
                           </td>
-                          <td className="py-4 px-4 text-right font-black">
+                          <td className="py-4 px-3 lg:px-4 text-right font-black whitespace-nowrap">
                             {turno.estado === 'Cerrado' ? (
                               <span
                                 className={
@@ -988,7 +991,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                               <span className="text-slate-400">--</span>
                             )}
                           </td>
-                          <td className="py-4 px-4 text-right whitespace-nowrap">
+                          <td className="py-4 px-3 lg:px-4 text-right whitespace-nowrap">
                             {turno.estado === 'Cerrado' && liquidacion ? (
                               <span className="inline-block font-black text-base text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-xl">
                                 {formatearMonedaUSD(liquidacion.totalNominaTurno)}
@@ -999,56 +1002,48 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                               </span>
                             )}
                           </td>
-                          <td className="py-4 px-4 text-center">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold ${
-                                turno.estado === 'Cerrado'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-amber-100 text-amber-800'
-                              }`}
-                            >
-                              {turno.estado === 'Cerrado' ? (
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                              ) : (
-                                <Clock className="w-3.5 h-3.5" />
-                              )}
-                              {turno.estado}
-                            </span>
-                          </td>
-                          <td className="py-4 px-4 text-center">
-                            <button
-                              type="button"
-                              onClick={() => alternarDetalleTurno(turno._id)}
-                              className="min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition cursor-pointer"
-                            >
-                              <Eye className="w-3.5 h-3.5 text-amber-400" />
-                              <span>{expandido ? 'Ocultar' : 'Ver detalle'}</span>
+                          <td className="py-4 px-3 lg:px-4 text-center whitespace-nowrap">
+                            <div className="inline-flex items-center justify-center gap-1.5">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold ${
+                                  turno.estado === 'Cerrado'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}
+                              >
+                                {turno.estado === 'Cerrado' ? (
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Clock className="w-3.5 h-3.5" />
+                                )}
+                                {turno.estado}
+                              </span>
                               {expandido ? (
-                                <ChevronUp className="w-3.5 h-3.5" />
+                                <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
                               ) : (
-                                <ChevronDown className="w-3.5 h-3.5" />
+                                <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
                               )}
-                            </button>
+                            </div>
                           </td>
                         </tr>
 
                         {/* Fila expandible con desglose individual de pago y reportes hora por hora */}
                         {expandido && (
                           <tr className="bg-slate-50/90">
-                            <td colSpan="11" className="p-5 border-b-2 border-slate-300">
-                              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-inner space-y-4">
+                            <td colSpan="10" className="p-4 lg:p-5 border-b-2 border-slate-300 w-full max-w-full overflow-hidden">
+                              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-inner space-y-4 w-full max-w-full overflow-hidden">
                                 {/* 1. Desglose Individual de Liquidación por Trabajador */}
                                 {turno.estado === 'Cerrado' && liquidacion && (
-                                  <div className="rounded-xl border-2 border-emerald-500/80 overflow-hidden">
-                                    <div className="bg-slate-900 text-white px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+                                  <div className="rounded-xl border-2 border-emerald-500/80 w-full max-w-full overflow-hidden">
+                                    <div className="bg-slate-900 text-white px-4 py-3 flex flex-wrap items-center justify-between gap-2 w-full">
                                       <div className="flex items-center gap-2">
-                                        <DollarSign className="w-4 h-4 text-emerald-400" />
+                                        <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
                                         <h4 className="font-extrabold text-sm">
                                           Desglose Individual de Liquidación por Trabajador ({turno.tipoTurno} -{' '}
                                           {formatearFechaLegible(turno.fecha)})
                                         </h4>
                                       </div>
-                                      <div className="flex items-center gap-3 text-xs font-bold">
+                                      <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
                                         <span className="text-slate-300">
                                           Tarifas: Máquina $0.35 | Estabilizado $0.30
                                         </span>
@@ -1058,14 +1053,14 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                       </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-3.5 bg-emerald-50/30">
+                                    <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 bg-emerald-50/30">
                                       {liquidacion.pagosPersonal.map((pago, idx) => (
                                         <div
                                           key={`${pago.nombre}-${idx}`}
-                                          className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-between gap-2"
+                                          className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-2 min-w-0"
                                         >
-                                          <div>
-                                            <div className="flex items-center gap-2">
+                                          <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
                                               <span className="font-black text-slate-900 text-base">
                                                 {pago.nombre}
                                               </span>
@@ -1096,9 +1091,9 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                 )}
 
                                 {/* 2. Desglose Hora a Hora de Entregas Parciales */}
-                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 w-full">
                                   <div className="flex items-center gap-2">
-                                    <Clock className="w-4 h-4 text-amber-600" />
+                                    <Clock className="w-4 h-4 text-amber-600 shrink-0" />
                                     <h4 className="font-extrabold text-sm text-slate-900">
                                       Desglose Hora a Hora de Reportes Parciales ({parciales.length}{' '}
                                       entregas)
@@ -1115,7 +1110,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                       ({calcularDuracionTurno(turno)})
                                     </span>
                                     <span className="inline-flex items-center gap-1.5">
-                                      <Users className="w-4 h-4 text-slate-400" />
+                                      <Users className="w-4 h-4 text-slate-400 shrink-0" />
                                       <span>
                                         Encargado: <strong>{turno.encargado}</strong> | Acompañantes:{' '}
                                         <strong>
@@ -1133,14 +1128,14 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                     No se registraron lotes parciales en este turno.
                                   </p>
                                 ) : (
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 w-full">
                                     {parciales.map((lote, idx) => (
                                       <div
                                         key={lote._id || idx}
-                                        className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-start justify-between gap-2"
+                                        className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-start justify-between gap-2 min-w-0"
                                       >
-                                        <div>
-                                          <div className="flex items-center gap-2">
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex flex-wrap items-center gap-1.5">
                                             <span className="text-xs font-black text-slate-400">
                                               Lote #{idx + 1}
                                             </span>
@@ -1148,11 +1143,11 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                               {lote.hora}
                                             </span>
                                           </div>
-                                          <p className="text-xs text-slate-600 mt-1">
+                                          <p className="text-xs text-slate-600 mt-1 break-words">
                                             {lote.observacion || 'Sin observaciones'}
                                           </p>
                                         </div>
-                                        <span className="text-base font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg shrink-0">
+                                        <span className="text-base font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg shrink-0">
                                           +{lote.cantidad}
                                         </span>
                                       </div>
