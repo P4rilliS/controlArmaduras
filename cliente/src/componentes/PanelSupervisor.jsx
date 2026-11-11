@@ -628,22 +628,22 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
       />
 
       {/* =====================================================================
-          5. HISTORIAL DE TURNOS (TARJETAS EN MÓVIL / TABLA EN ESCRITORIO)
+          5. HISTORIAL DE TURNOS (TARJETAS EJECUTIVAS EN MÓVIL/TABLET Y TABLA EN MONITORES XL)
          ===================================================================== */}
-      <section className="bg-white rounded-2xl shadow-md border border-slate-200 w-full max-w-7xl mx-auto overflow-hidden">
-        <div className="bg-slate-900 text-white px-4 sm:px-6 py-4 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <BarChart3 className="w-5 h-5 text-amber-400 shrink-0" />
-            <h3 className="font-bold text-base sm:text-lg">
-              Historial de Turnos y Detalle Hora por Hora
-            </h3>
+      <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 lg:px-6 my-6">
+        <section className="bg-white rounded-2xl shadow-md border border-slate-200 w-full overflow-hidden">
+          <div className="bg-slate-900 text-white px-4 sm:px-6 py-4 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <BarChart3 className="w-5 h-5 text-amber-400 shrink-0" />
+              <h3 className="font-bold text-base sm:text-lg">
+                Historial de Turnos y Detalle Hora por Hora
+              </h3>
+            </div>
+            <span className="text-xs font-bold bg-slate-800 text-amber-300 px-3 py-1 rounded-full shrink-0">
+              {turnosFiltrados.length} turnos
+            </span>
           </div>
-          <span className="text-xs font-bold bg-slate-800 text-amber-300 px-3 py-1 rounded-full shrink-0">
-            {turnosFiltrados.length} turnos
-          </span>
-        </div>
 
-        <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
           {turnosFiltrados.length === 0 ? (
             <div className="p-10 sm:p-12 text-center text-slate-500">
               <p className="font-bold text-base text-slate-700">
@@ -655,8 +655,8 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
             </div>
           ) : (
             <>
-              {/* VISTA MÓVIL: Tarjetas ("Cards") compactas e interactivas por turno */}
-              <div className="block md:hidden divide-y divide-slate-200 w-full max-w-full overflow-hidden">
+              {/* VISTA EN TARJETAS PARA TABLETS Y MÓVILES (block xl:hidden) */}
+              <div className="block xl:hidden p-3 sm:p-4 bg-slate-50/70 space-y-3.5 w-full">
                 {turnosFiltrados.map((turno) => {
                   const expandido = turnoExpandidoId === turno._id;
                   const parciales = turno.registrosParciales || [];
@@ -665,187 +665,261 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                     turno.estado === 'Cerrado' ? calcularLiquidacionTurnoCliente(turno) : null;
 
                   return (
-                    <div key={turno._id} className="w-full max-w-full overflow-hidden">
-                      {/* Fila / Tarjeta completa cliqueable */}
-                      <div
-                        onClick={() => toggleDetalleTurno(turno._id)}
-                        className="cursor-pointer hover:bg-slate-50/80 transition-colors select-none py-4 px-2 space-y-3.5"
-                        title="Haz clic para ver/ocultar el detalle del turno"
-                      >
-                        {/* Cabecera de la tarjeta */}
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-black text-base text-slate-900">
-                              {formatearFechaLegible(turno.fecha)}
-                            </span>
-                            <span
-                              className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-extrabold ${
-                                turno.tipoTurno === 'Primer Turno'
-                                  ? 'bg-amber-100 text-amber-900'
-                                  : 'bg-sky-100 text-sky-900'
-                              }`}
-                            >
-                              {turno.tipoTurno}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold ${
-                                turno.estado === 'Cerrado'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-amber-100 text-amber-800'
-                              }`}
-                            >
-                              {turno.estado === 'Cerrado' ? (
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                              ) : (
-                                <Clock className="w-3.5 h-3.5" />
-                              )}
-                              {turno.estado}
-                            </span>
-                            {expandido ? (
-                              <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
-                            )}
-                          </div>
+                    <div
+                      key={turno._id}
+                      onClick={() => toggleDetalleTurno(turno._id)}
+                      className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all p-4 cursor-pointer select-none w-full"
+                      title="Haz clic para ver/ocultar el detalle del turno"
+                    >
+                      {/* Fila Superior: Fecha con día, Badges de Turno y Estado + Indicador desplegable */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-black text-sm sm:text-base text-slate-900">
+                            {formatearFechaLegible(turno.fecha)}
+                          </span>
+                          <span
+                            className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-extrabold ${
+                              turno.tipoTurno === 'Primer Turno'
+                                ? 'bg-amber-100 text-amber-900'
+                                : 'bg-sky-100 text-sky-900'
+                            }`}
+                          >
+                            {turno.tipoTurno}
+                          </span>
                         </div>
 
-                        {/* Personal del turno */}
-                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-sm min-w-0">
-                          <div className="font-extrabold text-slate-900 break-words">
-                            Encargado: <span className="text-amber-700">{turno.encargado}</span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold ${
+                              turno.estado === 'Cerrado'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {turno.estado === 'Cerrado' ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                            ) : (
+                              <Clock className="w-3.5 h-3.5 shrink-0" />
+                            )}
+                            {turno.estado}
+                          </span>
+                          {expandido ? (
+                            <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Fila de Horario y Equipo */}
+                      <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-extrabold text-sm sm:text-base text-slate-900 break-words">
+                              {turno.encargado}
+                            </span>
+                            <span className="text-[11px] font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md shrink-0">
+                              Encargado
+                            </span>
                           </div>
-                          <div className="text-xs text-slate-600 mt-0.5 break-words">
+                          <p className="text-xs text-slate-500 font-medium mt-0.5 break-words">
                             {acompanantes.length > 0
                               ? `Acompañantes: ${acompanantes.join(' · ')}`
                               : 'Sin acompañantes (Trabaja solo)'}
-                          </div>
+                          </p>
                         </div>
 
-                        {/* Marcas de tiempo de Apertura, Cierre y Duración del Turno */}
-                        <div className="bg-slate-900 text-white p-3 rounded-xl grid grid-cols-3 gap-2 text-center">
+                        <div className="bg-slate-900 text-white px-3 py-2 rounded-xl flex flex-wrap items-center gap-3 text-xs shrink-0">
                           <div>
                             <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                              Hora Apertura
+                              Apertura
                             </span>
-                            <span className="text-xs font-black text-emerald-400">
+                            <span className="font-black text-emerald-400">
                               {turno.horaApertura || '--:--'}
                             </span>
                           </div>
+                          <div className="h-6 w-px bg-slate-700 hidden sm:block" />
                           <div>
                             <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                              Hora Cierre
+                              Cierre
                             </span>
-                            <span className="text-xs font-black text-amber-400">
+                            <span className="font-black text-amber-400">
                               {turno.estado === 'Cerrado'
                                 ? turno.horaCierre || '--:--'
                                 : 'En curso'}
                             </span>
                           </div>
+                          <div className="h-6 w-px bg-slate-700 hidden sm:block" />
                           <div>
                             <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                              Trabajado
+                              Duración
                             </span>
-                            <span className="text-xs font-black text-sky-300">
+                            <span className="font-black text-sky-300">
                               {calcularDuracionTurno(turno)}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Grilla de métricas del turno incluyendo Costo de Mano de Obra ($) */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                          <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200">
-                            <span className="text-[10px] font-bold uppercase text-emerald-800 block">
-                              Estabilizadas
-                            </span>
-                            <span className="text-base font-black text-emerald-700">
-                              {Number(turno.totalEstabilizadas || 0).toLocaleString('es-ES')}
-                            </span>
-                          </div>
-
-                          <div className="bg-slate-100 p-2.5 rounded-xl border border-slate-200">
-                            <span className="text-[10px] font-bold uppercase text-slate-500 block">
-                              Máquina
-                            </span>
-                            <span className="text-base font-black text-slate-800">
-                              {turno.estado === 'Cerrado'
-                                ? Number(turno.contadorMaquina || 0).toLocaleString('es-ES')
-                                : 'En curso'}
-                            </span>
-                          </div>
-
-                          <div className="bg-slate-100 p-2.5 rounded-xl border border-slate-200">
-                            <span className="text-[10px] font-bold uppercase text-slate-500 block">
-                              Diferencia
-                            </span>
-                            <span className="text-base font-black text-amber-700">
-                              {turno.estado === 'Cerrado'
-                                ? turno.diferencia > 0
-                                  ? `+${turno.diferencia}`
-                                  : turno.diferencia
-                                : '--'}
-                            </span>
-                          </div>
-
-                          <div className="bg-slate-900 text-white p-2.5 rounded-xl border border-slate-800">
-                            <span className="text-[10px] font-bold uppercase text-emerald-400 block">
-                              Mano de Obra ($)
-                            </span>
-                            <span className="text-base font-black text-emerald-400">
-                              {turno.estado === 'Cerrado' && liquidacion
-                                ? formatearMonedaUSD(liquidacion.totalNominaTurno)
-                                : 'En curso'}
                             </span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Desglose de liquidación individual y hora a hora dentro de la tarjeta móvil */}
+                      {/* Grid de Métricas Clave (4 columnas compactas con fondo suave) */}
+                      <div className="bg-slate-50 rounded-xl p-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center border border-slate-100 my-2.5">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                            Lotes
+                          </span>
+                          <span className="text-sm font-black text-slate-800">
+                            {parciales.length}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                            Estabilizadas
+                          </span>
+                          <span className="text-emerald-600 font-black text-sm">
+                            {Number(turno.totalEstabilizadas || 0).toLocaleString('es-ES')}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                            Máquina
+                          </span>
+                          <span className="text-sm font-black text-slate-800">
+                            {turno.estado === 'Cerrado'
+                              ? Number(turno.contadorMaquina || 0).toLocaleString('es-ES')
+                              : 'En curso'}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                            Diferencia
+                          </span>
+                          {turno.estado === 'Cerrado' ? (
+                            <span
+                              className={`text-sm font-black ${
+                                turno.diferencia > 0
+                                  ? 'text-amber-600'
+                                  : turno.diferencia < 0
+                                  ? 'text-rose-600'
+                                  : 'text-slate-600'
+                              }`}
+                            >
+                              {turno.diferencia > 0
+                                ? `+${turno.diferencia}`
+                                : turno.diferencia}
+                            </span>
+                          ) : (
+                            <span className="text-sm font-black text-slate-400">--</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Monto de Liquidación (si está cerrado) e Indicador desplegable */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        {turno.estado === 'Cerrado' && liquidacion ? (
+                          <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-black">
+                            <DollarSign className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span>
+                              Total Turno: {formatearMonedaUSD(liquidacion.totalNominaTurno)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-semibold text-slate-400">
+                            Liquidación disponible al cerrar el turno
+                          </span>
+                        )}
+
+                        <div className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 ml-auto">
+                          <span>{expandido ? 'Ocultar detalle' : 'Ver detalle'}</span>
+                          {expandido ? (
+                            <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Detalle Expandido (dentro de la misma tarjeta al hacer clic) */}
                       {expandido && (
-                        <div className="px-2 pb-4 w-full max-w-full overflow-hidden">
-                          <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 space-y-3 w-full max-w-full overflow-hidden">
-                            {/* Desglose individual por trabajador */}
-                            {turno.estado === 'Cerrado' && liquidacion && (
-                              <div className="bg-white rounded-xl border border-emerald-300 w-full max-w-full overflow-hidden">
-                                <div className="bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 text-xs font-extrabold">
-                                  <span className="flex items-center gap-1.5">
-                                    <DollarSign className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                                    <span>Desglose de Pago por Trabajador</span>
-                                  </span>
-                                  <span className="text-emerald-400">
-                                    Total: {formatearMonedaUSD(liquidacion.totalNominaTurno)}
-                                  </span>
+                        <div className="mt-3.5 pt-3.5 border-t border-slate-200 space-y-3.5 w-full">
+                          {/* 1. Desglose Individual de Liquidación por Trabajador */}
+                          {turno.estado === 'Cerrado' && liquidacion && (
+                            <div className="rounded-xl border border-emerald-400/80 w-full overflow-hidden">
+                              <div className="bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 text-xs w-full">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
+                                  <h4 className="font-extrabold text-xs sm:text-sm break-words">
+                                    Desglose Individual de Liquidación por Trabajador ({turno.tipoTurno} -{' '}
+                                    {formatearFechaLegible(turno.fecha)})
+                                  </h4>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 w-full p-3 bg-emerald-50/30">
-                                  {liquidacion.pagosPersonal.map((pago, idx) => (
-                                    <div
-                                      key={`${pago.nombre}-${idx}`}
-                                      className="w-full min-w-0 flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white gap-2 text-xs"
-                                    >
-                                      <div className="min-w-0">
-                                        <span className="font-extrabold text-slate-900">
-                                          {pago.nombre}
-                                        </span>{' '}
-                                        <span className="font-bold text-slate-500">
-                                          ({pago.rol} · {pago.concepto})
-                                        </span>
-                                        <span className="block text-[11px] text-slate-500">
-                                          {pago.detalleBase}
-                                        </span>
-                                      </div>
-                                      <span className="font-black text-sm text-emerald-700 shrink-0">
-                                        {formatearMonedaUSD(pago.montoPagar)}
-                                      </span>
-                                    </div>
-                                  ))}
+                                <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+                                  <span className="text-slate-300">
+                                    Tarifas: Máquina $0.35 | Estabilizado $0.30
+                                  </span>
+                                  <span className="bg-emerald-500 text-slate-950 font-black px-2.5 py-1 rounded-full">
+                                    Total Mano de Obra: {formatearMonedaUSD(liquidacion.totalNominaTurno)}
+                                  </span>
                                 </div>
                               </div>
-                            )}
 
-                            <div className="text-xs font-extrabold uppercase text-slate-500 pt-1">
-                              Entregas Parciales Hora por Hora ({parciales.length})
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 w-full p-3 bg-emerald-50/30">
+                                {liquidacion.pagosPersonal.map((pago, idx) => (
+                                  <div
+                                    key={`${pago.nombre}-${idx}`}
+                                    className="w-full min-w-0 flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white shadow-xs gap-2"
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className="font-black text-slate-900 text-sm break-words">
+                                          {pago.nombre}
+                                        </span>
+                                        <span
+                                          className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full shrink-0 ${
+                                            pago.rol === 'Encargado'
+                                              ? 'bg-amber-100 text-amber-900'
+                                              : 'bg-sky-100 text-sky-900'
+                                          }`}
+                                        >
+                                          {pago.rol}
+                                        </span>
+                                      </div>
+                                      <span className="text-xs font-semibold text-slate-600 block mt-0.5">
+                                        Concepto: {pago.concepto}
+                                      </span>
+                                      <span className="text-[11px] text-slate-500 block">
+                                        {pago.detalleBase}
+                                      </span>
+                                    </div>
+                                    <span className="text-base font-black text-emerald-700 shrink-0">
+                                      {formatearMonedaUSD(pago.montoPagar)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 2. Desglose Hora a Hora de Reportes Parciales */}
+                          <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 w-full">
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-2.5 w-full">
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                                <h4 className="font-extrabold text-xs sm:text-sm text-slate-900">
+                                  Desglose Hora a Hora de Reportes Parciales ({parciales.length}{' '}
+                                  entregas)
+                                </h4>
+                              </div>
+                              <span className="text-xs text-slate-500 font-semibold">
+                                Apertura: <strong>{turno.horaApertura || '--:--'}</strong> · Cierre:{' '}
+                                <strong>
+                                  {turno.estado === 'Cerrado'
+                                    ? turno.horaCierre || '--:--'
+                                    : 'En curso'}
+                                </strong>
+                              </span>
                             </div>
 
                             {parciales.length === 0 ? (
@@ -885,24 +959,22 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                 })}
               </div>
 
-              {/* VISTA TABLET / ESCRITORIO: Tabla adaptable para resoluciones intermedias (768px-1032px) y escritorio */}
-              <div className="hidden md:block w-full overflow-x-auto lg:overflow-x-visible">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-slate-100 text-slate-600 text-[11px] sm:text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
+              {/* VISTA EN TABLA LIMPIA PARA PANTALLAS GRANDES (hidden xl:block) */}
+              <div className="hidden xl:block w-full">
+                <table className="w-full table-auto text-left border-collapse">
+                  <thead className="bg-slate-100 text-slate-600 text-xs font-extrabold uppercase tracking-wider border-b border-slate-200">
                     <tr>
-                      <th className="px-1.5 sm:px-2.5 py-3">Fecha</th>
-                      <th className="px-1.5 sm:px-2.5 py-3">Turno</th>
-                      <th className="px-1.5 sm:px-2.5 py-3">Apertura / Cierre</th>
-                      <th className="px-1.5 sm:px-2.5 py-3">Encargado y Equipo</th>
-                      <th className="px-1.5 sm:px-2.5 py-3 w-16 sm:w-20 text-center">Entregas</th>
-                      <th className="px-1.5 sm:px-2.5 py-3 w-16 sm:w-20 text-center">Estabiliz.</th>
-                      <th className="px-1.5 sm:px-2.5 py-3 w-16 sm:w-20 text-center">Máquina</th>
-                      <th className="px-1.5 sm:px-2.5 py-3 w-16 sm:w-20 text-center">Diferencia</th>
-                      <th className="px-1.5 sm:px-2.5 py-3 text-center">Mano de Obra ($)</th>
-                      <th className="px-1.5 sm:px-2.5 py-3 text-center">Estado</th>
+                      <th className="py-3.5 px-3">Fecha y Turno</th>
+                      <th className="py-3.5 px-3">Horario</th>
+                      <th className="py-3.5 px-3">Encargado y Equipo</th>
+                      <th className="py-3.5 px-2.5 text-center">Lotes</th>
+                      <th className="py-3.5 px-2.5 text-center">Estabilizadas</th>
+                      <th className="py-3.5 px-2.5 text-center">Máquina</th>
+                      <th className="py-3.5 px-2.5 text-center">Diferencia</th>
+                      <th className="py-3.5 px-3 text-right">Liquidación y Estado</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200 text-[11px] sm:text-xs font-semibold">
+                  <tbody className="divide-y divide-slate-200 text-sm">
                     {turnosFiltrados.map((turno) => {
                       const expandido = turnoExpandidoId === turno._id;
                       const parciales = turno.registrosParciales || [];
@@ -919,12 +991,12 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                             }`}
                             title="Haz clic para ver/ocultar el detalle del turno"
                           >
-                            <td className="px-1.5 sm:px-2.5 py-3 font-bold text-slate-800 whitespace-nowrap">
-                              {formatearFechaLegible(turno.fecha)}
-                            </td>
-                            <td className="px-1.5 sm:px-2.5 py-3 whitespace-nowrap">
+                            <td className="py-3.5 px-3">
+                              <div className="font-bold text-slate-900">
+                                {formatearFechaLegible(turno.fecha)}
+                              </div>
                               <span
-                                className={`inline-block px-2 py-0.5 rounded-lg text-[11px] sm:text-xs font-extrabold ${
+                                className={`mt-1 inline-block px-2.5 py-0.5 rounded-lg text-xs font-extrabold ${
                                   turno.tipoTurno === 'Primer Turno'
                                     ? 'bg-amber-100 text-amber-900'
                                     : 'bg-sky-100 text-sky-900'
@@ -933,7 +1005,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                 {turno.tipoTurno}
                               </span>
                             </td>
-                            <td className="px-1.5 sm:px-2.5 py-3 whitespace-nowrap text-[11px] sm:text-xs font-semibold">
+                            <td className="py-3.5 px-3 text-xs font-semibold">
                               <div className="text-slate-800">
                                 <span className="text-emerald-700 font-bold">Inicio:</span>{' '}
                                 {turno.horaApertura || '--:--'}
@@ -948,38 +1020,31 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                 Duración: {calcularDuracionTurno(turno)}
                               </div>
                             </td>
-                            <td className="px-1.5 sm:px-2.5 py-3 min-w-0 max-w-[180px] lg:max-w-[260px]">
-                              <div className="min-w-0">
-                                <div className="font-extrabold text-slate-900 flex flex-wrap items-center gap-1">
-                                  <span className="break-words">{turno.encargado}</span>
-                                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded shrink-0">
-                                    Encargado
-                                  </span>
-                                </div>
-                                <div className="text-[11px] sm:text-xs font-semibold text-slate-500 mt-0.5 break-words leading-snug">
-                                  {acompanantes.length > 0 ? (
-                                    <>
-                                      <span className="font-bold text-slate-600">Acomp.:</span>{' '}
-                                      {acompanantes.join(' · ')}
-                                    </>
-                                  ) : (
-                                    'Sin acompañantes (Trabaja solo)'
-                                  )}
-                                </div>
+                            <td className="py-3.5 px-3 min-w-0">
+                              <div className="font-extrabold text-slate-900 flex flex-wrap items-center gap-1.5">
+                                <span className="break-words">{turno.encargado}</span>
+                                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                                  Encargado
+                                </span>
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5 break-words">
+                                {acompanantes.length > 0
+                                  ? `Acompañantes: ${acompanantes.join(' · ')}`
+                                  : 'Sin acompañantes (Trabaja solo)'}
                               </div>
                             </td>
-                            <td className="px-1.5 sm:px-2.5 py-3 w-16 sm:w-20 text-center font-bold text-slate-700 whitespace-nowrap">
+                            <td className="py-3.5 px-2.5 text-center font-bold text-slate-700">
                               {parciales.length}
                             </td>
-                            <td className="px-1.5 sm:px-2.5 py-3 w-16 sm:w-20 text-center font-black text-emerald-700 text-xs sm:text-sm whitespace-nowrap">
+                            <td className="py-3.5 px-2.5 text-center font-black text-emerald-600 text-base">
                               {Number(turno.totalEstabilizadas || 0).toLocaleString('es-ES')}
                             </td>
-                            <td className="px-1.5 sm:px-2.5 py-3 w-16 sm:w-20 text-center font-black text-slate-800 whitespace-nowrap">
+                            <td className="py-3.5 px-2.5 text-center font-black text-slate-800">
                               {turno.estado === 'Cerrado'
                                 ? Number(turno.contadorMaquina || 0).toLocaleString('es-ES')
                                 : 'En curso'}
                             </td>
-                            <td className="px-1.5 sm:px-2.5 py-3 w-16 sm:w-20 text-center font-black whitespace-nowrap">
+                            <td className="py-3.5 px-2.5 text-center font-black">
                               {turno.estado === 'Cerrado' ? (
                                 <span
                                   className={
@@ -987,7 +1052,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                       ? 'text-amber-600'
                                       : turno.diferencia < 0
                                       ? 'text-rose-600'
-                                      : 'text-emerald-600'
+                                      : 'text-slate-600'
                                   }
                                 >
                                   {turno.diferencia > 0
@@ -998,30 +1063,24 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                 <span className="text-slate-400">--</span>
                               )}
                             </td>
-                            <td className="px-1.5 sm:px-2.5 py-3 text-center whitespace-nowrap">
-                              {turno.estado === 'Cerrado' && liquidacion ? (
-                                <span className="inline-block font-black text-xs sm:text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl">
-                                  {formatearMonedaUSD(liquidacion.totalNominaTurno)}
-                                </span>
-                              ) : (
-                                <span className="text-[11px] sm:text-xs font-semibold text-slate-400">
-                                  En curso
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-1.5 sm:px-2.5 py-3 text-center whitespace-nowrap">
-                              <div className="inline-flex items-center justify-center gap-1">
+                            <td className="py-3.5 px-3 text-right">
+                              <div className="inline-flex items-center justify-end gap-2">
+                                {turno.estado === 'Cerrado' && liquidacion && (
+                                  <span className="inline-block font-black text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl">
+                                    {formatearMonedaUSD(liquidacion.totalNominaTurno)}
+                                  </span>
+                                )}
                                 <span
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold ${
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold ${
                                     turno.estado === 'Cerrado'
                                       ? 'bg-emerald-100 text-emerald-800'
                                       : 'bg-amber-100 text-amber-800'
                                   }`}
                                 >
                                   {turno.estado === 'Cerrado' ? (
-                                    <CheckCircle2 className="w-3 h-3 shrink-0" />
+                                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                                   ) : (
-                                    <Clock className="w-3 h-3 shrink-0" />
+                                    <Clock className="w-3.5 h-3.5 shrink-0" />
                                   )}
                                   {turno.estado}
                                 </span>
@@ -1037,24 +1096,24 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                           {/* Fila expandible con desglose individual de pago y reportes hora por hora */}
                           {expandido && (
                             <tr className="bg-slate-50/90">
-                              <td colSpan="10" className="px-1.5 sm:px-2.5 py-3 border-b-2 border-slate-300 w-full max-w-full">
-                                <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-inner space-y-4 w-full max-w-full overflow-hidden">
+                              <td colSpan="8" className="p-4 border-b-2 border-slate-300 w-full">
+                                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-inner space-y-4 w-full">
                                   {/* 1. Desglose Individual de Liquidación por Trabajador */}
                                   {turno.estado === 'Cerrado' && liquidacion && (
-                                    <div className="rounded-xl border-2 border-emerald-500/80 w-full max-w-full overflow-hidden">
+                                    <div className="rounded-xl border-2 border-emerald-500/80 w-full overflow-hidden">
                                       <div className="bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 text-xs w-full">
                                         <div className="flex items-center gap-2 min-w-0">
                                           <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
-                                          <h4 className="font-extrabold text-xs sm:text-sm break-words">
+                                          <h4 className="font-extrabold text-sm break-words">
                                             Desglose Individual de Liquidación por Trabajador ({turno.tipoTurno} -{' '}
                                             {formatearFechaLegible(turno.fecha)})
                                           </h4>
                                         </div>
-                                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-bold">
+                                        <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
                                           <span className="text-slate-300">
                                             Tarifas: Máquina $0.35 | Estabilizado $0.30
                                           </span>
-                                          <span className="bg-emerald-500 text-slate-950 font-black px-2.5 py-1 rounded-full">
+                                          <span className="bg-emerald-500 text-slate-950 font-black px-3 py-1 rounded-full">
                                             Total Mano de Obra: {formatearMonedaUSD(liquidacion.totalNominaTurno)}
                                           </span>
                                         </div>
@@ -1064,15 +1123,15 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                         {liquidacion.pagosPersonal.map((pago, idx) => (
                                           <div
                                             key={`${pago.nombre}-${idx}`}
-                                            className="w-full min-w-0 flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white shadow-sm gap-2"
+                                            className="w-full min-w-0 flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white shadow-xs gap-2"
                                           >
                                             <div className="min-w-0">
-                                              <div className="flex flex-wrap items-center gap-1.5">
-                                                <span className="font-black text-slate-900 text-sm sm:text-base break-words">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                <span className="font-black text-slate-900 text-base break-words">
                                                   {pago.nombre}
                                                 </span>
                                                 <span
-                                                  className={`text-[10px] sm:text-[11px] font-extrabold px-2 py-0.5 rounded-full shrink-0 ${
+                                                  className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full shrink-0 ${
                                                     pago.rol === 'Encargado'
                                                       ? 'bg-amber-100 text-amber-900'
                                                       : 'bg-sky-100 text-sky-900'
@@ -1081,14 +1140,14 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                                   {pago.rol}
                                                 </span>
                                               </div>
-                                              <span className="text-[11px] sm:text-xs font-semibold text-slate-600 block mt-0.5">
+                                              <span className="text-xs font-bold text-slate-600 block mt-0.5">
                                                 Concepto: {pago.concepto}
                                               </span>
                                               <span className="text-[11px] text-slate-500 block">
                                                 {pago.detalleBase}
                                               </span>
                                             </div>
-                                            <span className="text-base sm:text-lg font-black text-emerald-700 shrink-0">
+                                            <span className="text-lg font-black text-emerald-700 shrink-0">
                                               {formatearMonedaUSD(pago.montoPagar)}
                                             </span>
                                           </div>
@@ -1099,15 +1158,15 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
 
                                   {/* 2. Desglose Hora a Hora de Entregas Parciales */}
                                   <div className="w-full">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3 w-full">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 w-full">
                                       <div className="flex items-center gap-2">
                                         <Clock className="w-4 h-4 text-amber-600 shrink-0" />
-                                        <h4 className="font-extrabold text-xs sm:text-sm text-slate-900">
+                                        <h4 className="font-extrabold text-sm text-slate-900">
                                           Desglose Hora a Hora de Reportes Parciales ({parciales.length}{' '}
                                           entregas)
                                         </h4>
                                       </div>
-                                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] sm:text-xs font-semibold text-slate-600">
+                                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 font-semibold">
                                         <span className="bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
                                           Apertura: <strong>{turno.horaApertura || '--:--'}</strong> | Cierre:{' '}
                                           <strong>
@@ -1117,9 +1176,9 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                           </strong>{' '}
                                           ({calcularDuracionTurno(turno)})
                                         </span>
-                                        <span className="inline-flex items-center gap-1.5 min-w-0">
+                                        <span className="inline-flex items-center gap-1.5">
                                           <Users className="w-4 h-4 text-slate-400 shrink-0" />
-                                          <span className="break-words">
+                                          <span>
                                             Encargado: <strong>{turno.encargado}</strong> | Acompañantes:{' '}
                                             <strong>
                                               {acompanantes.length > 0
@@ -1150,7 +1209,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                                 {lote.hora}
                                               </span>
                                             </div>
-                                            <span className="text-sm sm:text-base font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-lg">
+                                            <span className="text-base font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-lg">
                                               +{lote.cantidad}
                                             </span>
                                             <p className="text-[11px] text-slate-600 break-words w-full">
@@ -1173,8 +1232,8 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
               </div>
             </>
           )}
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 };
