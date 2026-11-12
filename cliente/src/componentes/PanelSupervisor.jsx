@@ -195,7 +195,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
   const segundoTurnoStats = comparativaTurnos.segundoTurno;
 
   return (
-    <div className="space-y-5 w-full max-w-6xl mx-auto">
+    <div className="space-y-5 w-full max-w-7xl mx-auto">
       {/* Encabezado de Supervisión y Exportación a Excel */}
       <div className="bg-slate-900 text-white p-4 sm:p-6 rounded-2xl shadow-lg border-l-8 border-amber-500 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -468,7 +468,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
       {/* =====================================================================
           5. HISTORIAL DE TURNOS (TARJETAS EJECUTIVAS EN MÓVIL/TABLET Y TABLA EN MONITORES XL)
          ===================================================================== */}
-      <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 lg:px-6 my-6">
+      <div className="w-full max-w-7xl mx-auto my-6">
         <section className="bg-white rounded-2xl shadow-md border border-slate-200 w-full overflow-hidden">
           <div className="bg-slate-900 text-white px-4 sm:px-6 py-4 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
@@ -839,18 +839,34 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
               </div>
 
               {/* VISTA EN TABLA LIMPIA PARA PANTALLAS GRANDES (hidden xl:block) */}
-              <div className="hidden xl:block w-full">
+              <div className="hidden xl:block w-full overflow-hidden">
                 <table className="w-full table-auto text-left border-collapse">
-                  <thead className="bg-slate-100 text-slate-600 text-xs font-extrabold uppercase tracking-wider border-b border-slate-200">
+                  <thead className="bg-slate-100 text-slate-600 text-[11px] font-extrabold uppercase tracking-wider border-b border-slate-200">
                     <tr>
-                      <th className="py-3.5 px-3">Fecha y Turno</th>
-                      <th className="py-3.5 px-3">Horario</th>
-                      <th className="py-3.5 px-3">Puestos y Asistencia</th>
-                      <th className="py-3.5 px-2.5 text-center">Lotes</th>
-                      <th className="py-3.5 px-2.5 text-center">Estabilizadas</th>
-                      <th className="py-3.5 px-2.5 text-center">Máquina</th>
-                      <th className="py-3.5 px-2.5 text-center">Diferencia</th>
-                      <th className="py-3.5 px-3 text-right">Liquidación y Estado</th>
+                      <th className="w-[15%] min-w-[145px] py-3.5 px-3 whitespace-nowrap">
+                        Fecha y Turno
+                      </th>
+                      <th className="w-[17%] min-w-[165px] py-3.5 px-3 whitespace-nowrap">
+                        Horario
+                      </th>
+                      <th className="w-[26%] min-w-[230px] py-3.5 px-3">
+                        Puestos y Asistencia
+                      </th>
+                      <th className="w-[6%] py-3.5 px-1.5 text-center whitespace-nowrap">
+                        Lotes
+                      </th>
+                      <th className="w-[8%] py-3.5 px-1.5 text-center whitespace-nowrap">
+                        Estabilizadas
+                      </th>
+                      <th className="w-[7%] py-3.5 px-1.5 text-center whitespace-nowrap">
+                        Máquina
+                      </th>
+                      <th className="w-[7%] py-3.5 px-1.5 text-center whitespace-nowrap">
+                        Diferencia
+                      </th>
+                      <th className="w-[14%] min-w-[145px] py-3.5 px-3 text-right whitespace-nowrap">
+                        Liquidación y Estado
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 text-sm">
@@ -875,17 +891,18 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                         <React.Fragment key={turno._id}>
                           <tr
                             onClick={() => toggleDetalleTurno(turno._id)}
-                            className={`cursor-pointer hover:bg-slate-50/80 transition-colors select-none ${
-                              expandido ? 'bg-slate-50/80' : ''
+                            className={`cursor-pointer hover:bg-slate-50/90 transition-colors select-none ${
+                              expandido ? 'bg-slate-50/90' : ''
                             }`}
                             title="Haz clic para ver/ocultar el detalle del turno"
                           >
-                            <td className="py-3.5 px-3">
-                              <div className="font-bold text-slate-900">
+                            {/* Columna 1: Fecha y Turno */}
+                            <td className="w-[15%] min-w-[145px] py-3.5 px-3 align-middle whitespace-nowrap">
+                              <div className="font-bold text-slate-900 whitespace-nowrap">
                                 {formatearFechaLegible(turno.fecha)}
                               </div>
                               <span
-                                className={`mt-1 inline-block px-2.5 py-0.5 rounded-lg text-xs font-extrabold ${
+                                className={`mt-1 inline-block px-2.5 py-0.5 rounded-lg text-xs font-extrabold whitespace-nowrap ${
                                   turno.tipoTurno === 'Primer Turno'
                                     ? 'bg-amber-100 text-amber-900'
                                     : 'bg-sky-100 text-sky-900'
@@ -894,25 +911,29 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                 {turno.tipoTurno}
                               </span>
                             </td>
-                            <td className="py-3.5 px-3 text-xs font-semibold">
-                              <div className="text-slate-800">
+
+                            {/* Columna 2: Horario (Inicio, Cierre y Duración en una sola línea cada uno) */}
+                            <td className="w-[17%] min-w-[165px] py-3.5 px-3 align-middle text-xs font-semibold whitespace-nowrap">
+                              <div className="text-slate-800 whitespace-nowrap">
                                 <span className="text-emerald-700 font-bold">Inicio:</span>{' '}
                                 {turno.horaApertura || '--:--'}
                               </div>
-                              <div className="text-slate-800 mt-0.5">
+                              <div className="text-slate-800 mt-0.5 whitespace-nowrap">
                                 <span className="text-amber-700 font-bold">Cierre:</span>{' '}
                                 {turno.estado === 'Cerrado'
                                   ? turno.horaCierre || '--:--'
                                   : 'En curso'}
                               </div>
-                              <div className="text-[11px] font-extrabold text-sky-700 mt-0.5">
+                              <div className="text-[11px] font-extrabold text-sky-700 mt-0.5 whitespace-nowrap">
                                 Duración: {calcularDuracionTurno(turno)}
                               </div>
                             </td>
-                            <td className="py-3.5 px-3 min-w-0">
+
+                            {/* Columna 3: Puestos y Asistencia */}
+                            <td className="w-[26%] min-w-[230px] py-3.5 px-3 align-middle">
                               <div className="flex flex-wrap items-center gap-1.5">
                                 <span
-                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border ${
+                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border whitespace-nowrap ${
                                     maqPresente
                                       ? 'bg-amber-50 text-amber-950 border-amber-200'
                                       : 'bg-slate-100 text-slate-500 border-slate-200'
@@ -929,7 +950,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                 </span>
 
                                 <span
-                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border ${
+                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border whitespace-nowrap ${
                                     aniPresente
                                       ? 'bg-sky-50 text-sky-950 border-sky-200'
                                       : 'bg-slate-100 text-slate-500 border-slate-200'
@@ -946,7 +967,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                 </span>
 
                                 <span
-                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border ${
+                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border whitespace-nowrap ${
                                     estPresente
                                       ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
                                       : 'bg-slate-100 text-slate-500 border-slate-200'
@@ -963,18 +984,20 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                 </span>
                               </div>
                             </td>
-                            <td className="py-3.5 px-2.5 text-center font-bold text-slate-700">
+
+                            {/* Columnas Numéricas Compactas (Lotes, Estabilizadas, Máquina, Diferencia) */}
+                            <td className="w-[6%] py-3.5 px-1.5 align-middle text-center font-bold text-slate-700 whitespace-nowrap">
                               {parciales.length}
                             </td>
-                            <td className="py-3.5 px-2.5 text-center font-black text-emerald-600 text-base">
+                            <td className="w-[8%] py-3.5 px-1.5 align-middle text-center font-black text-emerald-600 text-base whitespace-nowrap">
                               {Number(turno.totalEstabilizadas || 0).toLocaleString('es-ES')}
                             </td>
-                            <td className="py-3.5 px-2.5 text-center font-black text-slate-800">
+                            <td className="w-[7%] py-3.5 px-1.5 align-middle text-center font-black text-slate-800 whitespace-nowrap">
                               {turno.estado === 'Cerrado'
                                 ? Number(turno.contadorMaquina || 0).toLocaleString('es-ES')
                                 : 'En curso'}
                             </td>
-                            <td className="py-3.5 px-2.5 text-center font-black">
+                            <td className="w-[7%] py-3.5 px-1.5 align-middle text-center font-black whitespace-nowrap">
                               {turno.estado === 'Cerrado' ? (
                                 <span
                                   className={
@@ -993,15 +1016,17 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                 <span className="text-slate-400">--</span>
                               )}
                             </td>
-                            <td className="py-3.5 px-3 text-right">
-                              <div className="inline-flex items-center justify-end gap-2">
+
+                            {/* Columna 8: Liquidación y Estado */}
+                            <td className="w-[14%] min-w-[145px] py-3.5 px-3 align-middle text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                                 {turno.estado === 'Cerrado' && liquidacion && (
-                                  <span className="inline-block font-black text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl">
+                                  <span className="inline-block font-black text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl whitespace-nowrap">
                                     {formatearMonedaUSD(liquidacion.totalNominaTurno)}
                                   </span>
                                 )}
                                 <span
-                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold ${
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold whitespace-nowrap ${
                                     turno.estado === 'Cerrado'
                                       ? 'bg-emerald-100 text-emerald-800'
                                       : 'bg-amber-100 text-amber-800'
