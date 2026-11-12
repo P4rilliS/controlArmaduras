@@ -359,7 +359,7 @@ const FormularioRegistro = ({
                 }`}
               >
                 <span className="text-[11px] font-extrabold uppercase text-slate-500 block">
-                  1. Máquina (Encargado)
+                  1. Máquina
                 </span>
                 {puestosTurnoActual.puestoMaquina.asistio &&
                 puestosTurnoActual.puestoMaquina.trabajador ? (
