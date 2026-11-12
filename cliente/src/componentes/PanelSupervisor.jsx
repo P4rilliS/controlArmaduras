@@ -5,14 +5,10 @@ import {
   Filter,
   ChevronDown,
   ChevronUp,
-  Gauge,
   CheckCircle2,
   Clock,
   Users,
   RefreshCw,
-  TrendingUp,
-  AlertTriangle,
-  Layers,
   DollarSign
 } from 'lucide-react';
 import { obtenerDatosSupervisor } from '../servicios/apiTurnos';
@@ -22,26 +18,57 @@ import {
   obtenerFechaLocalISO,
   calcularDuracionTurno,
   calcularLiquidacionTurnoCliente,
-  formatearMonedaUSD
+  formatearMonedaUSD,
+  obtenerPuestosNormalizadosTurno
 } from '../utilidades/exportarExcel';
 import { obtenerFechaHoyISO } from './FormularioRegistro';
 import ResumenTotalesFiltro from './ResumenTotalesFiltro';
 
 /**
- * Panel completo de Supervisión Mobile-First (Estadísticas, Comparativa de Turnos,
+ * Calcula automáticamente el rango de fechas de la Semana de Corte vigente (Viernes a Jueves).
+ */
+const calcularRangoSemanaCorte = () => {
+  const hoy = new Date();
+  const diasDesdeViernes = (hoy.getDay() + 2) % 7;
+
+  const viernesInicio = new Date(hoy);
+  viernesInicio.setDate(hoy.getDate() - diasDesdeViernes);
+
+  const juevesFin = new Date(viernesInicio);
+  juevesFin.setDate(viernesInicio.getDate() + 6);
+
+  return {
+    fechaInicio: obtenerFechaLocalISO(viernesInicio),
+    fechaFin: obtenerFechaLocalISO(juevesFin),
+    etiqueta: 'Semana de Corte (Vie-Jue)'
+  };
+};
+
+/**
+ * Panel completo de Supervisión Mobile-First (Comparativa de Turnos,
  * Sumatoria y Resumen Consolidado Reactivo, Auditoría Hora a Hora y Exportación a Excel/CSV).
  */
 const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
-  const [fechaInicio, setFechaInicio] = useState('');
-  const [fechaFin, setFechaFin] = useState('');
+  const rangoInicialCorte = useMemo(() => calcularRangoSemanaCorte(), []);
+
+  const [fechaInicio, setFechaInicio] = useState(rangoInicialCorte.fechaInicio);
+  const [fechaFin, setFechaFin] = useState(rangoInicialCorte.fechaFin);
   const [tipoTurno, setTipoTurno] = useState('Todos');
   const [estadoTurno, setEstadoTurno] = useState('Todos');
-  const [cicloSeleccionado, setCicloSeleccionado] = useState('Todos los registros');
+  const [cicloSeleccionado, setCicloSeleccionado] = useState(rangoInicialCorte.etiqueta);
 
   const [todosLosTurnos, setTodosLosTurnos] = useState([]);
   const [turnoExpandidoId, setTurnoExpandidoId] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [avisoModoLocal, setAvisoModoLocal] = useState(false);
+
+  // Filtro activo por defecto al montar el componente: Semana de Corte (Vie-Jue)
+  const aplicarFiltroSemanaCorte = useCallback(() => {
+    const rango = calcularRangoSemanaCorte();
+    setFechaInicio(rango.fechaInicio);
+    setFechaFin(rango.fechaFin);
+    setCicloSeleccionado(rango.etiqueta);
+  }, []);
 
   // Cargar historial completo desde la API de MongoDB (el filtrado y sumatoria se hacen reactivamente en cliente con useMemo)
   const cargarEstadisticas = useCallback(async () => {
@@ -59,8 +86,9 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
   }, [claveSupervisor, turnosRespaldoLocal]);
 
   useEffect(() => {
+    aplicarFiltroSemanaCorte();
     cargarEstadisticas();
-  }, [cargarEstadisticas]);
+  }, [aplicarFiltroSemanaCorte, cargarEstadisticas]);
 
   // Arreglo de turnos filtrados reactivamente al instante según fechas, ciclo, tipo de turno y estado
   const turnosFiltrados = useMemo(() => {
@@ -74,42 +102,9 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
     });
   }, [todosLosTurnos, fechaInicio, fechaFin, tipoTurno, estadoTurno]);
 
-  // Cálculo reactivo de métricas globales y comparativa de turnos a partir de todosLosTurnos y turnosFiltrados
-  const metricas = useMemo(() => {
-    const hoyClave = obtenerFechaHoyISO();
-    const hace7Dias = new Date();
-    hace7Dias.setDate(hace7Dias.getDate() - 6);
-    const semanaClave = obtenerFechaLocalISO(hace7Dias);
-
-    let totalEstabilizadasHoy = 0;
-    let totalEstabilizadasSemana = 0;
-    let totalNominaHoy = 0;
-    let totalNominaSemana = 0;
-
-    todosLosTurnos.forEach((t) => {
-      const f = obtenerFechaLocalISO(t.fecha);
-      const cant = Number(t.totalEstabilizadas) || 0;
-      const nomina =
-        t.estado === 'Cerrado'
-          ? Number(calcularLiquidacionTurnoCliente(t).totalNominaTurno) || 0
-          : 0;
-      if (f === hoyClave) {
-        totalEstabilizadasHoy += cant;
-        totalNominaHoy = Number((totalNominaHoy + nomina).toFixed(2));
-      }
-      if (f >= semanaClave && f <= hoyClave) {
-        totalEstabilizadasSemana += cant;
-        totalNominaSemana = Number((totalNominaSemana + nomina).toFixed(2));
-      }
-    });
-
-    let totalEstabilizadasPeriodo = 0;
-    let totalEstabilizadasCerradasPeriodo = 0;
-    let totalMaquinaPeriodo = 0;
-    let diferenciaTotalPeriodo = 0;
-    let totalNominaPeriodo = 0;
-
-    const comparativaTurnos = {
+  // Cálculo reactivo de la comparativa entre Primer Turno y Segundo Turno sobre los turnos filtrados
+  const comparativaTurnos = useMemo(() => {
+    const acumulador = {
       primerTurno: {
         cantidadTurnos: 0,
         totalEstabilizadas: 0,
@@ -138,18 +133,10 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
       const liq = estaCerrado ? calcularLiquidacionTurnoCliente(t) : null;
       const nomina = estaCerrado ? Number(liq.totalNominaTurno) || 0 : 0;
 
-      totalEstabilizadasPeriodo += est;
-      if (estaCerrado) {
-        totalEstabilizadasCerradasPeriodo += est;
-        totalMaquinaPeriodo += maq;
-        diferenciaTotalPeriodo += dif;
-        totalNominaPeriodo = Number((totalNominaPeriodo + nomina).toFixed(2));
-      }
-
       const grupo =
         t.tipoTurno === 'Primer Turno'
-          ? comparativaTurnos.primerTurno
-          : comparativaTurnos.segundoTurno;
+          ? acumulador.primerTurno
+          : acumulador.segundoTurno;
 
       grupo.cantidadTurnos += 1;
       grupo.totalEstabilizadas += est;
@@ -161,81 +148,35 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
       }
     });
 
-    if (comparativaTurnos.primerTurno.totalMaquina > 0) {
-      comparativaTurnos.primerTurno.rendimiento = Number(
+    if (acumulador.primerTurno.totalMaquina > 0) {
+      acumulador.primerTurno.rendimiento = Number(
         (
-          (comparativaTurnos.primerTurno.estabilizadasCerradas /
-            comparativaTurnos.primerTurno.totalMaquina) *
+          (acumulador.primerTurno.estabilizadasCerradas /
+            acumulador.primerTurno.totalMaquina) *
           100
         ).toFixed(1)
       );
     }
 
-    if (comparativaTurnos.segundoTurno.totalMaquina > 0) {
-      comparativaTurnos.segundoTurno.rendimiento = Number(
+    if (acumulador.segundoTurno.totalMaquina > 0) {
+      acumulador.segundoTurno.rendimiento = Number(
         (
-          (comparativaTurnos.segundoTurno.estabilizadasCerradas /
-            comparativaTurnos.segundoTurno.totalMaquina) *
+          (acumulador.segundoTurno.estabilizadasCerradas /
+            acumulador.segundoTurno.totalMaquina) *
           100
         ).toFixed(1)
       );
     }
 
-    const rendimientoPorcentaje =
-      totalMaquinaPeriodo > 0
-        ? Number(((totalEstabilizadasCerradasPeriodo / totalMaquinaPeriodo) * 100).toFixed(1))
-        : 0;
+    return acumulador;
+  }, [turnosFiltrados]);
 
-    return {
-      totalEstabilizadasHoy,
-      totalEstabilizadasSemana,
-      totalEstabilizadasPeriodo,
-      totalEstabilizadasCerradasPeriodo,
-      totalMaquinaPeriodo,
-      diferenciaTotalPeriodo,
-      rendimientoPorcentaje,
-      totalNominaHoy,
-      totalNominaSemana,
-      totalNominaPeriodo,
-      cantidadTurnosPeriodo: turnosFiltrados.length,
-      comparativaTurnos
-    };
-  }, [todosLosTurnos, turnosFiltrados]);
-
-  // Filtros rápidos de fecha y ciclo de pago (Hoy, Semana de Corte Sáb-Vie, Últimos 7 días, Todos)
+  // Filtros rápidos de fecha y ciclo de pago (Hoy, Semana de Corte Vie-Jue, Ver Todo)
   const aplicarFiltroHoy = () => {
     const hoy = obtenerFechaHoyISO();
     setFechaInicio(hoy);
     setFechaFin(hoy);
     setCicloSeleccionado('Hoy');
-  };
-
-  const aplicarFiltroSemanaCorte = () => {
-  const hoy = new Date();
-  // Semana de corte de nómina: desde el viernes hasta el jueves de la semana en curso
-  const diasDesdeViernes = (hoy.getDay() + 2) % 7;
-
-  // Fecha de inicio: viernes más reciente (o hoy si es viernes)
-  const viernesInicio = new Date(hoy);
-  viernesInicio.setDate(hoy.getDate() - diasDesdeViernes);
-
-  // Fecha de fin: 6 días después (jueves de cierre)
-  const juevesFin = new Date(viernesInicio);
-  juevesFin.setDate(viernesInicio.getDate() + 6);
-
-  setFechaInicio(obtenerFechaLocalISO(viernesInicio));
-  setFechaFin(obtenerFechaLocalISO(juevesFin));
-  setCicloSeleccionado('Semana de Corte (Vie - Jue)');
-};
-
-
-  const aplicarFiltroSemana = () => {
-    const hoy = new Date();
-    const hace7 = new Date();
-    hace7.setDate(hoy.getDate() - 6);
-    setFechaInicio(obtenerFechaLocalISO(hace7));
-    setFechaFin(obtenerFechaHoyISO());
-    setCicloSeleccionado('Últimos 7 días');
   };
 
   const limpiarFiltros = () => {
@@ -250,23 +191,8 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
     setTurnoExpandidoId((actual) => (actual === idTurno ? null : idTurno));
   };
 
-  const primerTurnoStats = metricas?.comparativaTurnos?.primerTurno || {
-    cantidadTurnos: 0,
-    totalEstabilizadas: 0,
-    totalMaquina: 0,
-    diferencia: 0,
-    rendimiento: 0,
-    totalNomina: 0
-  };
-
-  const segundoTurnoStats = metricas?.comparativaTurnos?.segundoTurno || {
-    cantidadTurnos: 0,
-    totalEstabilizadas: 0,
-    totalMaquina: 0,
-    diferencia: 0,
-    rendimiento: 0,
-    totalNomina: 0
-  };
+  const primerTurnoStats = comparativaTurnos.primerTurno;
+  const segundoTurnoStats = comparativaTurnos.segundoTurno;
 
   return (
     <div className="space-y-5 w-full max-w-6xl mx-auto">
@@ -280,7 +206,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
             Panel de Supervisión de Armaduras
           </h2>
           <p className="text-xs sm:text-sm text-slate-300 mt-1">
-            Métricas consolidadas por día/semana, comparativa entre turnos y desglose hora por hora.
+            Comparativa entre turnos, liquidación de nómina por ciclo de corte y desglose hora por hora.
           </p>
         </div>
 
@@ -313,88 +239,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
       )}
 
       {/* =====================================================================
-          1. TARJETAS DE MÉTRICAS CLAVE (DÍA, SEMANA, MÁQUINA, MERMA Y NÓMINA EN USD)
-         ===================================================================== */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-md border border-slate-200">
-          <div className="flex items-center justify-between text-xs font-extrabold uppercase text-slate-400">
-            <span>Estabilizadas Hoy</span>
-            <Layers className="w-4 h-4 text-emerald-500 shrink-0" />
-          </div>
-          <p className="text-3xl font-black text-slate-900 mt-2">
-            {(metricas?.totalEstabilizadasHoy || 0).toLocaleString('es-ES')}
-          </p>
-          <span className="text-xs font-semibold text-emerald-600 mt-1 block">
-            Nómina hoy: {formatearMonedaUSD(metricas?.totalNominaHoy || 0)}
-          </span>
-        </div>
-
-        <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-md border border-slate-200">
-          <div className="flex items-center justify-between text-xs font-extrabold uppercase text-slate-400">
-            <span>Últimos 7 Días (Semana)</span>
-            <TrendingUp className="w-4 h-4 text-amber-500 shrink-0" />
-          </div>
-          <p className="text-3xl font-black text-slate-900 mt-2">
-            {(metricas?.totalEstabilizadasSemana || 0).toLocaleString('es-ES')}
-          </p>
-          <span className="text-xs font-semibold text-slate-500 mt-1 block">
-            Nómina 7 días: {formatearMonedaUSD(metricas?.totalNominaSemana || 0)}
-          </span>
-        </div>
-
-        <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-md border border-slate-200">
-          <div className="flex items-center justify-between text-xs font-extrabold uppercase text-slate-400">
-            <span>Rendimiento vs Máquina</span>
-            <Gauge className="w-4 h-4 text-sky-500 shrink-0" />
-          </div>
-          <p className="text-3xl font-black text-sky-600 mt-2">
-            {metricas?.rendimientoPorcentaje || 0}%
-          </p>
-          <span className="text-xs font-semibold text-slate-500 mt-1 block">
-            {(
-              metricas?.totalEstabilizadasCerradasPeriodo ??
-              metricas?.totalEstabilizadasPeriodo ??
-              0
-            ).toLocaleString('es-ES')}{' '}
-            est. / {(metricas?.totalMaquinaPeriodo || 0).toLocaleString('es-ES')} máq.
-          </span>
-        </div>
-
-        <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-md border border-slate-200">
-          <div className="flex items-center justify-between text-xs font-extrabold uppercase text-slate-400">
-            <span>Diferencia / Merma Periodo</span>
-            <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
-          </div>
-          <p
-            className={`text-3xl font-black mt-2 ${
-              (metricas?.diferenciaTotalPeriodo || 0) > 0
-                ? 'text-amber-600'
-                : 'text-emerald-600'
-            }`}
-          >
-            {(metricas?.diferenciaTotalPeriodo || 0).toLocaleString('es-ES')} uds.
-          </p>
-          <span className="text-xs font-semibold text-slate-500 mt-1 block">
-            En {metricas?.cantidadTurnosPeriodo || 0} turnos filtrados
-          </span>
-        </div>
-
-        <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl shadow-md border-b-4 border-emerald-500">
-          <div className="flex items-center justify-between text-xs font-extrabold uppercase text-slate-400">
-            <span>Total Pagado ($ USD)</span>
-            <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
-          </div>
-          <p className="text-3xl font-black text-emerald-400 mt-2">
-            {formatearMonedaUSD(metricas?.totalNominaPeriodo || 0)}
-          </p>
-          <span className="text-xs font-semibold text-slate-300 mt-1 block">
-            Mano de obra del periodo filtrado
-          </span>
-        </div>
-      </div>
-
-      {/* =====================================================================
-          2. COMPARATIVA ENTRE PRIMER TURNO Y SEGUNDO TURNO
+          1. COMPARATIVA ENTRE PRIMER TURNO Y SEGUNDO TURNO
          ===================================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Tarjeta Primer Turno */}
@@ -513,7 +358,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
       </div>
 
       {/* =====================================================================
-          3. BARRA DE FILTROS DEL HISTORIAL (POR FECHA, SEMANA DE CORTE, TURNO Y ESTADO)
+          2. BARRA DE FILTROS DEL HISTORIAL (POR FECHA, SEMANA DE CORTE, TURNO Y ESTADO)
          ===================================================================== */}
       <section className="bg-white rounded-2xl shadow-md border border-slate-200 p-4 sm:p-5 space-y-4 w-full">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -522,32 +367,25 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
             <span>Filtros de Auditoría y Ciclo de Pago</span>
           </div>
 
-          <div className="grid grid-cols-2 sm:flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={aplicarFiltroHoy}
-              className="min-h-[44px] px-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs sm:text-sm transition cursor-pointer"
+              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs sm:text-sm transition cursor-pointer"
             >
               Hoy
             </button>
             <button
               type="button"
               onClick={aplicarFiltroSemanaCorte}
-              className="min-h-[44px] px-3 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-extrabold text-xs sm:text-sm transition cursor-pointer"
+              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-extrabold text-xs sm:text-sm transition cursor-pointer"
             >
               Semana de Corte (Vie-Jue)
             </button>
             <button
               type="button"
-              onClick={aplicarFiltroSemana}
-              className="min-h-[44px] px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm transition cursor-pointer"
-            >
-              7 días
-            </button>
-            <button
-              type="button"
               onClick={limpiarFiltros}
-              className="min-h-[44px] px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm transition cursor-pointer"
+              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm transition cursor-pointer"
             >
               Ver Todo
             </button>
@@ -660,7 +498,17 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                 {turnosFiltrados.map((turno) => {
                   const expandido = turnoExpandidoId === turno._id;
                   const parciales = turno.registrosParciales || [];
-                  const acompanantes = (turno.operadores || []).filter(Boolean);
+                  const { puestoMaquina, puestoAnillador, puestoEstabilizador } =
+                    obtenerPuestosNormalizadosTurno(turno);
+                  const maqPresente = Boolean(
+                    puestoMaquina.asistio && puestoMaquina.trabajador
+                  );
+                  const aniPresente = Boolean(
+                    puestoAnillador.asistio && puestoAnillador.trabajador
+                  );
+                  const estPresente = Boolean(
+                    puestoEstabilizador.asistio && puestoEstabilizador.trabajador
+                  );
                   const liquidacion =
                     turno.estado === 'Cerrado' ? calcularLiquidacionTurnoCliente(turno) : null;
 
@@ -711,22 +559,53 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                         </div>
                       </div>
 
-                      {/* Fila de Horario y Equipo */}
+                      {/* Fila de Horario y Puestos de Trabajo (Badges sutiles de asistencia/inasistencia) */}
                       <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-extrabold text-sm sm:text-base text-slate-900 break-words">
-                              {turno.encargado}
+                        <div className="min-w-0 flex-1 flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border ${
+                              maqPresente
+                                ? 'bg-amber-50 text-amber-950 border-amber-200'
+                                : 'bg-slate-100 text-slate-500 border-slate-200'
+                            }`}
+                          >
+                            <span className="text-[10px] uppercase font-extrabold opacity-75">
+                              Máquina:
                             </span>
-                            <span className="text-[11px] font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md shrink-0">
-                              Encargado
+                            <strong className={maqPresente ? 'text-slate-900' : 'text-rose-600'}>
+                              {maqPresente ? puestoMaquina.trabajador : 'Falta'}
+                            </strong>
+                          </span>
+
+                          <span
+                            className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border ${
+                              aniPresente
+                                ? 'bg-sky-50 text-sky-950 border-sky-200'
+                                : 'bg-slate-100 text-slate-500 border-slate-200'
+                            }`}
+                          >
+                            <span className="text-[10px] uppercase font-extrabold opacity-75">
+                              Anillador:
                             </span>
-                          </div>
-                          <p className="text-xs text-slate-500 font-medium mt-0.5 break-words">
-                            {acompanantes.length > 0
-                              ? `Acompañantes: ${acompanantes.join(' · ')}`
-                              : 'Sin acompañantes (Trabaja solo)'}
-                          </p>
+                            <strong className={aniPresente ? 'text-slate-900' : 'text-slate-500'}>
+                              {aniPresente ? puestoAnillador.trabajador : 'Falta'}
+                            </strong>
+                          </span>
+
+                          <span
+                            className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border ${
+                              estPresente
+                                ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
+                                : 'bg-slate-100 text-slate-500 border-slate-200'
+                            }`}
+                          >
+                            <span className="text-[10px] uppercase font-extrabold opacity-75">
+                              Estabilizador:
+                            </span>
+                            <strong className={estPresente ? 'text-slate-900' : 'text-slate-500'}>
+                              {estPresente ? puestoEstabilizador.trabajador : 'Falta'}
+                            </strong>
+                          </span>
                         </div>
 
                         <div className="bg-slate-900 text-white px-3 py-2 rounded-xl flex flex-wrap items-center gap-3 text-xs shrink-0">
@@ -966,7 +845,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                     <tr>
                       <th className="py-3.5 px-3">Fecha y Turno</th>
                       <th className="py-3.5 px-3">Horario</th>
-                      <th className="py-3.5 px-3">Encargado y Equipo</th>
+                      <th className="py-3.5 px-3">Puestos y Asistencia</th>
                       <th className="py-3.5 px-2.5 text-center">Lotes</th>
                       <th className="py-3.5 px-2.5 text-center">Estabilizadas</th>
                       <th className="py-3.5 px-2.5 text-center">Máquina</th>
@@ -978,7 +857,17 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                     {turnosFiltrados.map((turno) => {
                       const expandido = turnoExpandidoId === turno._id;
                       const parciales = turno.registrosParciales || [];
-                      const acompanantes = (turno.operadores || []).filter(Boolean);
+                      const { puestoMaquina, puestoAnillador, puestoEstabilizador } =
+                        obtenerPuestosNormalizadosTurno(turno);
+                      const maqPresente = Boolean(
+                        puestoMaquina.asistio && puestoMaquina.trabajador
+                      );
+                      const aniPresente = Boolean(
+                        puestoAnillador.asistio && puestoAnillador.trabajador
+                      );
+                      const estPresente = Boolean(
+                        puestoEstabilizador.asistio && puestoEstabilizador.trabajador
+                      );
                       const liquidacion =
                         turno.estado === 'Cerrado' ? calcularLiquidacionTurnoCliente(turno) : null;
 
@@ -1021,16 +910,57 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                               </div>
                             </td>
                             <td className="py-3.5 px-3 min-w-0">
-                              <div className="font-extrabold text-slate-900 flex flex-wrap items-center gap-1.5">
-                                <span className="break-words">{turno.encargado}</span>
-                                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
-                                  Encargado
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span
+                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border ${
+                                    maqPresente
+                                      ? 'bg-amber-50 text-amber-950 border-amber-200'
+                                      : 'bg-slate-100 text-slate-500 border-slate-200'
+                                  }`}
+                                >
+                                  <span className="text-[10px] uppercase font-extrabold opacity-75">
+                                    Máquina:
+                                  </span>
+                                  <strong
+                                    className={maqPresente ? 'text-slate-900' : 'text-rose-600'}
+                                  >
+                                    {maqPresente ? puestoMaquina.trabajador : 'Falta'}
+                                  </strong>
                                 </span>
-                              </div>
-                              <div className="text-xs text-slate-500 mt-0.5 break-words">
-                                {acompanantes.length > 0
-                                  ? `Acompañantes: ${acompanantes.join(' · ')}`
-                                  : 'Sin acompañantes (Trabaja solo)'}
+
+                                <span
+                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border ${
+                                    aniPresente
+                                      ? 'bg-sky-50 text-sky-950 border-sky-200'
+                                      : 'bg-slate-100 text-slate-500 border-slate-200'
+                                  }`}
+                                >
+                                  <span className="text-[10px] uppercase font-extrabold opacity-75">
+                                    Anillador:
+                                  </span>
+                                  <strong
+                                    className={aniPresente ? 'text-slate-900' : 'text-slate-500'}
+                                  >
+                                    {aniPresente ? puestoAnillador.trabajador : 'Falta'}
+                                  </strong>
+                                </span>
+
+                                <span
+                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border ${
+                                    estPresente
+                                      ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
+                                      : 'bg-slate-100 text-slate-500 border-slate-200'
+                                  }`}
+                                >
+                                  <span className="text-[10px] uppercase font-extrabold opacity-75">
+                                    Estabilizador:
+                                  </span>
+                                  <strong
+                                    className={estPresente ? 'text-slate-900' : 'text-slate-500'}
+                                  >
+                                    {estPresente ? puestoEstabilizador.trabajador : 'Falta'}
+                                  </strong>
+                                </span>
                               </div>
                             </td>
                             <td className="py-3.5 px-2.5 text-center font-bold text-slate-700">
@@ -1179,11 +1109,19 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                         <span className="inline-flex items-center gap-1.5">
                                           <Users className="w-4 h-4 text-slate-400 shrink-0" />
                                           <span>
-                                            Encargado: <strong>{turno.encargado}</strong> | Acompañantes:{' '}
+                                            Máquina:{' '}
                                             <strong>
-                                              {acompanantes.length > 0
-                                                ? acompanantes.join(', ')
-                                                : 'Ninguno (Trabaja solo)'}
+                                              {maqPresente ? puestoMaquina.trabajador : 'Falta'}
+                                            </strong>{' '}
+                                            | Anillador:{' '}
+                                            <strong>
+                                              {aniPresente ? puestoAnillador.trabajador : 'Falta'}
+                                            </strong>{' '}
+                                            | Estabilizador:{' '}
+                                            <strong>
+                                              {estPresente
+                                                ? puestoEstabilizador.trabajador
+                                                : 'Falta'}
                                             </strong>
                                           </span>
                                         </span>

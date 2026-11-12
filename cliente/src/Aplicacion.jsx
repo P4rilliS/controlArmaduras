@@ -4,7 +4,10 @@ import FormularioRegistro, { obtenerHoraAutomatica } from './componentes/Formula
 import TablaParciales from './componentes/TablaParciales';
 import ModalSupervisor from './componentes/ModalSupervisor';
 import PanelSupervisor from './componentes/PanelSupervisor';
-import { calcularLiquidacionTurnoCliente } from './utilidades/exportarExcel';
+import {
+  calcularLiquidacionTurnoCliente,
+  obtenerResumenEquipoTurno
+} from './utilidades/exportarExcel';
 import {
   CLAVE_TOKEN_TURNO_ACTIVO,
   generarTokenDispositivo,
@@ -266,6 +269,9 @@ const Aplicacion = () => {
           fechaCierre: null,
           horaCierre: '',
           tipoTurno: datosTurno.tipoTurno,
+          puestoMaquina: datosTurno.puestoMaquina,
+          puestoAnillador: datosTurno.puestoAnillador,
+          puestoEstabilizador: datosTurno.puestoEstabilizador,
           encargado: datosTurno.encargado,
           operadores: datosTurno.operadores,
           registrosParciales: [],
@@ -343,7 +349,7 @@ const Aplicacion = () => {
   const manejarAgregarParcial = async (loteParcial, datosCabeceraRespaldo) => {
     if (enModoConsulta) {
       mostrarMensaje(
-        `Modo Consulta: Turno activo a cargo de ${turnoActual?.encargado}. Los controles están bloqueados en este dispositivo.`,
+        `Modo Consulta: Turno activo (${obtenerResumenEquipoTurno(turnoActual)}). Los controles están bloqueados en este dispositivo.`,
         'error'
       );
       return false;
@@ -471,6 +477,9 @@ const Aplicacion = () => {
             fechaApertura: turnoActual.fechaApertura,
             horaApertura: turnoActual.horaApertura,
             tipoTurno: turnoActual.tipoTurno,
+            puestoMaquina: turnoActual.puestoMaquina,
+            puestoAnillador: turnoActual.puestoAnillador,
+            puestoEstabilizador: turnoActual.puestoEstabilizador,
             encargado: turnoActual.encargado,
             operadores: turnoActual.operadores,
             registrosParciales: turnoActual.registrosParciales || [],
@@ -634,11 +643,11 @@ const Aplicacion = () => {
         <div className="bg-amber-100 border-b-2 border-amber-400 px-3 sm:px-6 py-3.5 shadow-sm">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
             <div className="text-amber-950 text-xs sm:text-sm font-bold leading-snug">
-              👀 Modo Consulta: Turno activo a cargo de{' '}
+              👀 Modo Consulta: Turno activo ({' '}
               <span className="underline decoration-amber-600 font-black">
-                {turnoActual.encargado}
+                {obtenerResumenEquipoTurno(turnoActual)}
               </span>
-              . Los controles de registro están bloqueados en este dispositivo.
+              ). Los controles de registro están bloqueados en este dispositivo.
             </div>
 
             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end shrink-0">

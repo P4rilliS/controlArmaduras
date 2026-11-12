@@ -1,11 +1,130 @@
 /**
  * Utilidad para el manejo seguro de fechas locales, cálculo de horas trabajadas,
- * liquidación de nómina por producción ($0.45 máquina / $0.30 estabilizado)
+ * normalización de los 3 puestos de línea (Máquina, Anillador, Estabilizador),
+ * liquidación de nómina por producción ($0.35 máquina / $0.30 estabilizado)
  * y exportación del resumen y detalle de turnos a un archivo CSV compatible con Excel.
  */
 
-export const TARIFA_MAQUINA_USD = 0.45;
+export const TARIFA_MAQUINA_USD = 0.35;
 export const TARIFA_ESTABILIZADA_USD = 0.30;
+
+const VALORES_INASISTENCIA_CLIENTE = new Set([
+  '',
+  'null',
+  'undefined',
+  'no vino',
+  'falta',
+  'sin asignar',
+  'ninguno',
+  '[-- no vino / sin asignar --]'
+]);
+
+const normalizarPuestoIndividualCliente = (puestoRaw, tarifaPorDefecto) => {
+  if (!puestoRaw || typeof puestoRaw !== 'object') {
+    const nombreLimpio = typeof puestoRaw === 'string' ? puestoRaw.trim() : '';
+    const esAusente =
+      !nombreLimpio || VALORES_INASISTENCIA_CLIENTE.has(nombreLimpio.toLowerCase());
+    return {
+      trabajador: esAusente ? null : nombreLimpio,
+      asistio: !esAusente,
+      tarifa: tarifaPorDefecto
+    };
+  }
+
+  const nombreLimpio =
+    puestoRaw.trabajador !== null && puestoRaw.trabajador !== undefined
+      ? String(puestoRaw.trabajador).trim()
+      : '';
+  const esNombreAusente =
+    !nombreLimpio || VALORES_INASISTENCIA_CLIENTE.has(nombreLimpio.toLowerCase());
+  const trabajadorNormalizado = esNombreAusente ? null : nombreLimpio;
+  const asistioNormalizado =
+    trabajadorNormalizado === null
+      ? false
+      : puestoRaw.asistio !== undefined
+      ? Boolean(puestoRaw.asistio)
+      : true;
+
+  return {
+    trabajador: trabajadorNormalizado,
+    asistio: asistioNormalizado,
+    tarifa:
+      typeof puestoRaw.tarifa === 'number' && !Number.isNaN(puestoRaw.tarifa)
+        ? puestoRaw.tarifa
+        : tarifaPorDefecto
+  };
+};
+
+/**
+ * Extrae y normaliza los 3 puestos operativos del turno (`puestoMaquina`, `puestoAnillador`, `puestoEstabilizador`),
+ * manteniendo compatibilidad hacia atrás con registros históricos que solo tengan `encargado` y `operadores`.
+ */
+export const obtenerPuestosNormalizadosTurno = (turno) => {
+  if (!turno) {
+    return {
+      puestoMaquina: { trabajador: null, asistio: false, tarifa: TARIFA_MAQUINA_USD },
+      puestoAnillador: { trabajador: null, asistio: false, tarifa: TARIFA_ESTABILIZADA_USD },
+      puestoEstabilizador: { trabajador: null, asistio: false, tarifa: TARIFA_ESTABILIZADA_USD }
+    };
+  }
+
+  const opsLegados = Array.isArray(turno.operadores) ? turno.operadores.filter(Boolean) : [];
+  const tienePuestosExplicitos =
+    (turno.puestoMaquina &&
+      (turno.puestoMaquina.trabajador || turno.puestoMaquina.asistio)) ||
+    (turno.puestoAnillador &&
+      (turno.puestoAnillador.trabajador || turno.puestoAnillador.asistio)) ||
+    (turno.puestoEstabilizador &&
+      (turno.puestoEstabilizador.trabajador || turno.puestoEstabilizador.asistio));
+
+  if (!tienePuestosExplicitos && (turno.encargado || opsLegados.length > 0)) {
+    return {
+      puestoMaquina: normalizarPuestoIndividualCliente(turno.encargado, TARIFA_MAQUINA_USD),
+      puestoAnillador: normalizarPuestoIndividualCliente(
+        opsLegados[0] || null,
+        TARIFA_ESTABILIZADA_USD
+      ),
+      puestoEstabilizador: normalizarPuestoIndividualCliente(
+        opsLegados[1] || null,
+        TARIFA_ESTABILIZADA_USD
+      )
+    };
+  }
+
+  return {
+    puestoMaquina: normalizarPuestoIndividualCliente(turno.puestoMaquina, TARIFA_MAQUINA_USD),
+    puestoAnillador: normalizarPuestoIndividualCliente(
+      turno.puestoAnillador,
+      TARIFA_ESTABILIZADA_USD
+    ),
+    puestoEstabilizador: normalizarPuestoIndividualCliente(
+      turno.puestoEstabilizador,
+      TARIFA_ESTABILIZADA_USD
+    )
+  };
+};
+
+/**
+ * Devuelve un resumen legible de los trabajadores presentes en el turno.
+ */
+export const obtenerResumenEquipoTurno = (turno) => {
+  if (!turno) return 'Sin personal asignado';
+  const { puestoMaquina, puestoAnillador, puestoEstabilizador } =
+    obtenerPuestosNormalizadosTurno(turno);
+
+  const presentes = [];
+  if (puestoMaquina.asistio && puestoMaquina.trabajador) {
+    presentes.push(`${puestoMaquina.trabajador} (Máquina)`);
+  }
+  if (puestoAnillador.asistio && puestoAnillador.trabajador) {
+    presentes.push(`${puestoAnillador.trabajador} (Anillador)`);
+  }
+  if (puestoEstabilizador.asistio && puestoEstabilizador.trabajador) {
+    presentes.push(`${puestoEstabilizador.trabajador} (Estabilizador)`);
+  }
+
+  return presentes.length > 0 ? presentes.join(' · ') : 'Sin personal presente';
+};
 
 const escaparValorCSV = (valor) => {
   if (valor === null || valor === undefined) return '""';
@@ -22,10 +141,12 @@ export const formatearMonedaUSD = (monto) => {
 };
 
 /**
- * Calcula o normaliza la liquidación de pago por producción del turno según la dotación:
- * - Escenario A (0 acompañantes): Encargado cobra (contadorMaquina * 0.45) + (totalEstabilizadas * 0.30)
- * - Escenario B (1 acompañante): Encargado cobra (contadorMaquina * 0.45) y Acompañante 1 cobra (totalEstabilizadas * 0.30)
- * - Escenario C (2 acompañantes): Encargado cobra (contadorMaquina * 0.45), Acompañante 1 cobra (totalEstabilizadas * 0.30) y Acompañante 2 cobra (totalEstabilizadas * 0.30)
+ * Calcula o normaliza la liquidación de pago por producción del turno según la asistencia real:
+ * - Si un puesto tuvo inasistencia (`!asistio` o `!trabajador`): devenga estrictamente $0.00 y no se incluye en pagos activos.
+ * - Puesto Máquina presente: devenga (contadorMaquina * 0.35). Si trabajó completamente solo
+ *   (sin anillador ni estabilizador presentes), suma también (totalEstabilizadas * 0.30).
+ * - Puesto Anillador presente: devenga (totalEstabilizadas * 0.30).
+ * - Puesto Estabilizador presente: devenga (totalEstabilizadas * 0.30).
  */
 export const calcularLiquidacionTurnoCliente = (turno, contadorMaquinaOverride = null) => {
   if (!turno) {
@@ -51,97 +172,81 @@ export const calcularLiquidacionTurnoCliente = (turno, contadorMaquinaOverride =
       ? Number(contadorMaquinaOverride) || 0
       : Number(turno.contadorMaquina) || 0;
 
-  const tarifaMaq = Number(turno.liquidacion?.tarifaMaquina) || TARIFA_MAQUINA_USD;
-  const tarifaEst = Number(turno.liquidacion?.tarifaEstabilizada) || TARIFA_ESTABILIZADA_USD;
+  const tarifaMaq = TARIFA_MAQUINA_USD;
+  const tarifaEst = TARIFA_ESTABILIZADA_USD;
 
-  // Si ya viene calculada desde la base de datos y no estamos previsualizando otro valor de máquina
-  if (
-    contadorMaquinaOverride === null &&
-    turno.liquidacion &&
-    Array.isArray(turno.liquidacion.pagosPersonal) &&
-    turno.liquidacion.pagosPersonal.length > 0
-  ) {
-    const pagosEnriquecidos = turno.liquidacion.pagosPersonal.map((pago) => {
-      let detalleBase = '';
-      if (pago.concepto === 'Máquina + Estabilizado') {
-        const subMaq = (cantidadMaquina * tarifaMaq).toFixed(2);
-        const subEst = (cantidadEstabilizadas * tarifaEst).toFixed(2);
-        detalleBase = `${cantidadMaquina} máq. ($${subMaq}) + ${cantidadEstabilizadas} est. ($${subEst})`;
-      } else if (pago.concepto === 'Máquina') {
-        detalleBase = `${cantidadMaquina} armaduras × $${tarifaMaq.toFixed(2)}`;
-      } else {
-        detalleBase = `${cantidadEstabilizadas} armaduras × $${tarifaEst.toFixed(2)}`;
-      }
-      return {
-        ...pago,
-        montoPagar: Number(Number(pago.montoPagar || 0).toFixed(2)),
-        detalleBase
-      };
-    });
+  const { puestoMaquina, puestoAnillador, puestoEstabilizador } =
+    obtenerPuestosNormalizadosTurno(turno);
 
-    const totalGuardado =
-      turno.liquidacion.totalNominaTurno !== undefined
-        ? Number(Number(turno.liquidacion.totalNominaTurno).toFixed(2))
-        : Number(
-            pagosEnriquecidos
-              .reduce((acc, p) => acc + (Number(p.montoPagar) || 0), 0)
-              .toFixed(2)
-          );
+  const maquinaPresente = Boolean(puestoMaquina.asistio && puestoMaquina.trabajador);
+  const anilladorPresente = Boolean(puestoAnillador.asistio && puestoAnillador.trabajador);
+  const estabilizadorPresente = Boolean(
+    puestoEstabilizador.asistio && puestoEstabilizador.trabajador
+  );
 
-    return {
-      tarifaMaquina: tarifaMaq,
-      tarifaEstabilizada: tarifaEst,
-      pagosPersonal: pagosEnriquecidos,
-      totalNominaTurno: totalGuardado
-    };
-  }
-
-  const encargado = turno.encargado || 'Encargado';
-  const listaAcompanantes = Array.isArray(turno.operadores)
-    ? turno.operadores.map((op) => (op ? String(op).trim() : '')).filter(Boolean)
-    : [];
+  const pagoMaquinaBase = Number((cantidadMaquina * tarifaMaq).toFixed(2));
+  const pagoEstabilizadoBase = Number((cantidadEstabilizadas * tarifaEst).toFixed(2));
 
   const pagosPersonal = [];
 
-  if (listaAcompanantes.length === 0) {
-    // Escenario A: El Encargado trabajó completamente SOLO (0 acompañantes)
-    const pagoMaquina = cantidadMaquina * tarifaMaq;
-    const pagoEstabilizado = cantidadEstabilizadas * tarifaEst;
-    const montoEncargado = Number((pagoMaquina + pagoEstabilizado).toFixed(2));
-
-    pagosPersonal.push({
-      nombre: encargado,
-      rol: 'Encargado',
-      concepto: 'Máquina + Estabilizado',
-      detalleBase: `${cantidadMaquina} máq. ($${pagoMaquina.toFixed(2)}) + ${cantidadEstabilizadas} est. ($${pagoEstabilizado.toFixed(2)})`,
-      montoPagar: montoEncargado
-    });
-  } else {
-    // Escenario B (1 acompañante) y Escenario C (2 acompañantes)
-    const montoEncargado = Number((cantidadMaquina * tarifaMaq).toFixed(2));
-    const montoAcompanante = Number((cantidadEstabilizadas * tarifaEst).toFixed(2));
-
-    pagosPersonal.push({
-      nombre: encargado,
-      rol: 'Encargado',
-      concepto: 'Máquina',
-      detalleBase: `${cantidadMaquina} armaduras × $${tarifaMaq.toFixed(2)}`,
-      montoPagar: montoEncargado
-    });
-
-    listaAcompanantes.forEach((nombreAcompanante) => {
+  // 1. Puesto Máquina (Encargado)
+  if (maquinaPresente) {
+    const trabajaCompletamenteSolo = !anilladorPresente && !estabilizadorPresente;
+    if (trabajaCompletamenteSolo) {
+      const montoSolo = Number((pagoMaquinaBase + pagoEstabilizadoBase).toFixed(2));
       pagosPersonal.push({
-        nombre: nombreAcompanante,
-        rol: 'Acompañante',
-        concepto: 'Estabilizado',
-        detalleBase: `${cantidadEstabilizadas} armaduras × $${tarifaEst.toFixed(2)}`,
-        montoPagar: montoAcompanante
+        nombre: puestoMaquina.trabajador,
+        puesto: 'Máquina',
+        rol: 'Máquina (Encargado)',
+        asistio: true,
+        concepto: 'Máquina + Estabilizado',
+        detalleBase: `${cantidadMaquina} máq. ($${pagoMaquinaBase.toFixed(2)}) + ${cantidadEstabilizadas} est. ($${pagoEstabilizadoBase.toFixed(2)})`,
+        montoPagar: montoSolo
       });
+    } else {
+      pagosPersonal.push({
+        nombre: puestoMaquina.trabajador,
+        puesto: 'Máquina',
+        rol: 'Máquina (Encargado)',
+        asistio: true,
+        concepto: 'Máquina',
+        detalleBase: `${cantidadMaquina} armaduras × $${tarifaMaq.toFixed(2)}`,
+        montoPagar: pagoMaquinaBase
+      });
+    }
+  }
+
+  // 2. Puesto Anillador
+  if (anilladorPresente) {
+    pagosPersonal.push({
+      nombre: puestoAnillador.trabajador,
+      puesto: 'Anillador',
+      rol: 'Anillador',
+      asistio: true,
+      concepto: 'Estabilizado',
+      detalleBase: `${cantidadEstabilizadas} armaduras × $${tarifaEst.toFixed(2)}`,
+      montoPagar: pagoEstabilizadoBase
+    });
+  }
+
+  // 3. Puesto Estabilizador
+  if (estabilizadorPresente) {
+    pagosPersonal.push({
+      nombre: puestoEstabilizador.trabajador,
+      puesto: 'Estabilizador',
+      rol: 'Estabilizador',
+      asistio: true,
+      concepto: 'Estabilizado',
+      detalleBase: `${cantidadEstabilizadas} armaduras × $${tarifaEst.toFixed(2)}`,
+      montoPagar: pagoEstabilizadoBase
     });
   }
 
   const totalNominaTurno = Number(
-    pagosPersonal.reduce((acc, p) => acc + (Number(p.montoPagar) || 0), 0).toFixed(2)
+    pagosPersonal
+      .filter((p) => p.asistio !== false)
+      .reduce((acc, p) => acc + (Number(p.montoPagar) || 0), 0)
+      .toFixed(2)
   );
 
   return {
@@ -243,9 +348,9 @@ export const exportarTurnosAExcelCSV = (turnos = [], etiquetaFiltro = 'resumen_d
     'Hora Apertura',
     'Hora Cierre',
     'Tiempo Trabajado',
-    'Encargado del Turno',
-    'Acompañante 1',
-    'Acompañante 2',
+    'Puesto Máquina (Encargado)',
+    'Puesto Anillador',
+    'Puesto Estabilizador',
     'Cant. Entregas Parciales',
     'Total Armaduras Estabilizadas',
     'Contador de Máquina',
@@ -261,8 +366,22 @@ export const exportarTurnosAExcelCSV = (turnos = [], etiquetaFiltro = 'resumen_d
     const horaApertura = turno.horaApertura || '-';
     const horaCierre = estaCerrado ? turno.horaCierre || '-' : 'En curso';
     const duracion = calcularDuracionTurno(turno);
-    const operador2 = turno.operadores?.[0] || 'Ninguno (Trabaja solo)';
-    const operador3 = turno.operadores?.[1] || '-';
+    const { puestoMaquina, puestoAnillador, puestoEstabilizador } =
+      obtenerPuestosNormalizadosTurno(turno);
+
+    const textoMaquina =
+      puestoMaquina.asistio && puestoMaquina.trabajador
+        ? puestoMaquina.trabajador
+        : 'Falta / Sin asignar';
+    const textoAnillador =
+      puestoAnillador.asistio && puestoAnillador.trabajador
+        ? puestoAnillador.trabajador
+        : 'Falta / Sin asignar';
+    const textoEstabilizador =
+      puestoEstabilizador.asistio && puestoEstabilizador.trabajador
+        ? puestoEstabilizador.trabajador
+        : 'Falta / Sin asignar';
+
     const cantParciales = turno.registrosParciales?.length || 0;
     const estabilizadas = Number(turno.totalEstabilizadas) || 0;
     const maquina = estaCerrado ? Number(turno.contadorMaquina) || 0 : 'En curso';
@@ -293,9 +412,9 @@ export const exportarTurnosAExcelCSV = (turnos = [], etiquetaFiltro = 'resumen_d
       horaApertura,
       horaCierre,
       duracion,
-      turno.encargado,
-      operador2,
-      operador3,
+      textoMaquina,
+      textoAnillador,
+      textoEstabilizador,
       cantParciales,
       estabilizadas,
       maquina,
@@ -312,7 +431,7 @@ export const exportarTurnosAExcelCSV = (turnos = [], etiquetaFiltro = 'resumen_d
   const encabezadosDetalle = [
     'Fecha del Turno',
     'Tipo de Turno',
-    'Encargado',
+    'Equipo Presente',
     'Hora Apertura Turno',
     'Hora Cierre Turno',
     'N° Entrega',
@@ -327,13 +446,14 @@ export const exportarTurnosAExcelCSV = (turnos = [], etiquetaFiltro = 'resumen_d
     const parciales = turno.registrosParciales || [];
     const horaApertura = turno.horaApertura || '-';
     const horaCierre = turno.estado === 'Cerrado' ? turno.horaCierre || '-' : 'En curso';
+    const resumenEquipo = obtenerResumenEquipoTurno(turno);
 
     if (parciales.length === 0) {
       filasDetalle.push(
         [
           fechaFormateada,
           turno.tipoTurno,
-          turno.encargado,
+          resumenEquipo,
           horaApertura,
           horaCierre,
           0,
@@ -350,7 +470,7 @@ export const exportarTurnosAExcelCSV = (turnos = [], etiquetaFiltro = 'resumen_d
           [
             fechaFormateada,
             turno.tipoTurno,
-            turno.encargado,
+            resumenEquipo,
             horaApertura,
             horaCierre,
             indice + 1,

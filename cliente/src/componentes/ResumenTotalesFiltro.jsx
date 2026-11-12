@@ -1,8 +1,5 @@
 import React, { useMemo } from 'react';
 import {
-  Gauge,
-  Layers,
-  AlertTriangle,
   DollarSign,
   Users,
   Calculator,
@@ -11,17 +8,15 @@ import {
 import {
   calcularLiquidacionTurnoCliente,
   formatearMonedaUSD,
-  formatearFechaConDia,
-  TARIFA_MAQUINA_USD,
-  TARIFA_ESTABILIZADA_USD
+  formatearFechaConDia
 } from '../utilidades/exportarExcel';
 
 /**
  * Sección destacada de "Sumatoria y Resumen Consolidado" para el Panel del Supervisor.
  * Se recalcula automáticamente en tiempo real mediante useMemo sobre el arreglo de
  * turnos filtrados (`turnosFiltrados`), mostrando:
- * 1. Tarjetas de Totales Generales (Total Máquina, Total Estabilizadas, Diferencia/Merma Neta y Total a Pagar Nómina).
- * 2. Tabla de Resumen por Trabajador (Nómina Acumulada del Filtro con armaduras liquidadas y monto total a transferir en $ USD).
+ * 1. Tarjeta ejecutiva principal del valor financiero: Total a Pagar Nómina ($ USD).
+ * 2. Tabla simplificada de Resumen por Trabajador (Turnos trabajados, Total Armaduras Realizadas y Monto Total a Transferir en $ USD).
  */
 const ResumenTotalesFiltro = ({
   turnosFiltrados = [],
@@ -30,8 +25,6 @@ const ResumenTotalesFiltro = ({
   cicloSeleccionado = ''
 }) => {
   const resumenConsolidado = useMemo(() => {
-    let totalMaquina = 0;
-    let totalEstabilizadas = 0;
     let totalNominaUSD = 0;
     let turnosCerradosCount = 0;
     let turnosEnProgresoCount = 0;
@@ -45,13 +38,7 @@ const ResumenTotalesFiltro = ({
         mapaTrabajadores[clave] = {
           nombre: clave,
           turnosParticipados: 0,
-          turnosEncargado: 0,
-          turnosAcompanante: 0,
-          armadurasMaquina: 0,
-          armadurasEstabilizadas: 0,
           totalArmadurasLiquidadas: 0,
-          montoMaquinaUSD: 0,
-          montoEstabilizadoUSD: 0,
           montoTotalUSD: 0
         };
       }
@@ -71,51 +58,28 @@ const ResumenTotalesFiltro = ({
       const estaCerrado = !turno.estado || turno.estado === 'Cerrado';
       const cantMaquina = estaCerrado ? Number(turno.contadorMaquina) || 0 : 0;
 
-      totalEstabilizadas += cantEstabilizadas;
-      totalMaquina += cantMaquina;
-
       if (estaCerrado) {
         turnosCerradosCount += 1;
         const liquidacion = calcularLiquidacionTurnoCliente(turno);
         const costoTurno = Number(liquidacion.totalNominaTurno) || 0;
         totalNominaUSD = Number((totalNominaUSD + costoTurno).toFixed(2));
 
-        const tarifaMaq = Number(liquidacion.tarifaMaquina) || TARIFA_MAQUINA_USD;
-        const tarifaEst = Number(liquidacion.tarifaEstabilizada) || TARIFA_ESTABILIZADA_USD;
-
         (liquidacion.pagosPersonal || []).forEach((pago) => {
+          // Regla estricta: si un trabajador tuvo inasistencia (asistio === false),
+          // no se le computa el turno ni se le acreditan piezas ni dinero.
+          if (pago.asistio === false || !pago.nombre) return;
+
           const reg = asegurarTrabajador(pago.nombre);
           if (!reg) return;
 
           reg.turnosParticipados += 1;
-          if (pago.rol === 'Encargado') {
-            reg.turnosEncargado += 1;
-          } else {
-            reg.turnosAcompanante += 1;
-          }
 
           if (pago.concepto === 'Máquina + Estabilizado') {
-            reg.armadurasMaquina += cantMaquina;
-            reg.armadurasEstabilizadas += cantEstabilizadas;
             reg.totalArmadurasLiquidadas += cantMaquina + cantEstabilizadas;
-            reg.montoMaquinaUSD = Number(
-              (reg.montoMaquinaUSD + cantMaquina * tarifaMaq).toFixed(2)
-            );
-            reg.montoEstabilizadoUSD = Number(
-              (reg.montoEstabilizadoUSD + cantEstabilizadas * tarifaEst).toFixed(2)
-            );
           } else if (pago.concepto === 'Máquina') {
-            reg.armadurasMaquina += cantMaquina;
             reg.totalArmadurasLiquidadas += cantMaquina;
-            reg.montoMaquinaUSD = Number(
-              (reg.montoMaquinaUSD + cantMaquina * tarifaMaq).toFixed(2)
-            );
           } else {
-            reg.armadurasEstabilizadas += cantEstabilizadas;
             reg.totalArmadurasLiquidadas += cantEstabilizadas;
-            reg.montoEstabilizadoUSD = Number(
-              (reg.montoEstabilizadoUSD + cantEstabilizadas * tarifaEst).toFixed(2)
-            );
           }
 
           reg.montoTotalUSD = Number(
@@ -127,8 +91,6 @@ const ResumenTotalesFiltro = ({
       }
     });
 
-    const diferenciaNeta = totalMaquina - totalEstabilizadas;
-
     const listaTrabajadores = Object.values(mapaTrabajadores).sort(
       (a, b) => b.montoTotalUSD - a.montoTotalUSD || a.nombre.localeCompare(b.nombre)
     );
@@ -139,9 +101,6 @@ const ResumenTotalesFiltro = ({
     );
 
     return {
-      totalMaquina,
-      totalEstabilizadas,
-      diferenciaNeta,
       totalNominaUSD,
       turnosCerradosCount,
       turnosEnProgresoCount,
@@ -151,9 +110,6 @@ const ResumenTotalesFiltro = ({
   }, [turnosFiltrados]);
 
   const {
-    totalMaquina,
-    totalEstabilizadas,
-    diferenciaNeta,
     totalNominaUSD,
     turnosCerradosCount,
     turnosEnProgresoCount,
@@ -216,74 +172,23 @@ const ResumenTotalesFiltro = ({
 
       <div className="p-4 sm:p-6 space-y-6 bg-slate-50/60">
         {/* ===================================================================
-            1. TARJETAS DE TOTALES GENERALES (KPIs DEL FILTRO ACTUAL)
+            1. TARJETA EJECUTIVA PRINCIPAL: TOTAL A PAGAR NÓMINA ($ USD)
            =================================================================== */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {/* Total Máquina */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200">
-            <div className="flex items-center justify-between text-xs font-extrabold uppercase text-slate-500">
-              <span>Total Máquina</span>
-              <Gauge className="w-4 h-4 text-sky-600 shrink-0" />
-            </div>
-            <p className="text-2xl sm:text-3xl font-black text-slate-900 mt-2">
-              {totalMaquina.toLocaleString('es-ES')}{' '}
-              <span className="text-sm font-bold text-slate-500">uds.</span>
-            </p>
-            <span className="text-xs font-semibold text-slate-500 mt-1 block">
-              Suma de máquina en turnos filtrados ($0.35/ud.)
-            </span>
-          </div>
-
-          {/* Total Estabilizadas */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200">
-            <div className="flex items-center justify-between text-xs font-extrabold uppercase text-slate-500">
-              <span>Total Estabilizadas</span>
-              <Layers className="w-4 h-4 text-emerald-600 shrink-0" />
-            </div>
-            <p className="text-2xl sm:text-3xl font-black text-emerald-700 mt-2">
-              {totalEstabilizadas.toLocaleString('es-ES')}{' '}
-              <span className="text-sm font-bold text-emerald-600">uds.</span>
-            </p>
-            <span className="text-xs font-semibold text-slate-500 mt-1 block">
-              Suma estabilizada en turnos filtrados ($0.30/ud.)
-            </span>
-          </div>
-
-          {/* Diferencia / Merma Neta */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200">
-            <div className="flex items-center justify-between text-xs font-extrabold uppercase text-slate-500">
-              <span>Diferencia / Merma Neta</span>
-              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-            </div>
-            <p
-              className={`text-2xl sm:text-3xl font-black mt-2 ${
-                diferenciaNeta > 0
-                  ? 'text-amber-600'
-                  : diferenciaNeta < 0
-                  ? 'text-rose-600'
-                  : 'text-emerald-600'
-              }`}
-            >
-              {diferenciaNeta > 0 ? `+${diferenciaNeta.toLocaleString('es-ES')}` : diferenciaNeta.toLocaleString('es-ES')}{' '}
-              <span className="text-sm font-bold">uds.</span>
-            </p>
-            <span className="text-xs font-semibold text-slate-500 mt-1 block">
-              Total Máquina − Total Estabilizadas
-            </span>
-          </div>
-
-          {/* Total a Pagar Nómina ($ USD) */}
-          <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl shadow-md border-b-4 border-emerald-500">
-            <div className="flex items-center justify-between text-xs font-extrabold uppercase text-emerald-400">
-              <span>Total a Pagar Nómina ($ USD)</span>
+        <div className="bg-slate-900 text-white p-5 sm:p-6 rounded-2xl shadow-md border-b-4 border-emerald-500 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-emerald-400">
               <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Total a Pagar Nómina ($ USD)</span>
             </div>
-            <p className="text-2xl sm:text-3xl font-black text-emerald-400 mt-2">
+            <p className="text-xs sm:text-sm font-semibold text-slate-300">
+              Suma total de mano de obra liquidada en el filtro seleccionado
+            </p>
+          </div>
+
+          <div className="sm:text-right">
+            <p className="text-3xl sm:text-4xl font-black text-emerald-400 tracking-tight">
               {formatearMonedaUSD(totalNominaUSD)}
             </p>
-            <span className="text-xs font-semibold text-slate-300 mt-1 block">
-              Suma total de mano de obra del filtro
-            </span>
           </div>
         </div>
 
@@ -315,18 +220,14 @@ const ResumenTotalesFiltro = ({
                 {listaTrabajadores.map((trabajador) => (
                   <div key={trabajador.nombre} className="p-4 space-y-2.5">
                     <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <span className="font-black text-base text-slate-900 block">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="font-black text-base text-slate-900 break-words">
                           {trabajador.nombre}
-                        </span>
-                        <span className="text-xs font-semibold text-slate-500">
-                          {trabajador.turnosParticipados}{' '}
-                          {trabajador.turnosParticipados === 1 ? 'turno' : 'turnos'} (
-                          {trabajador.turnosEncargado} Enc. / {trabajador.turnosAcompanante} Acomp.)
                         </span>
                       </div>
 
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <span className="text-[10px] font-extrabold uppercase text-emerald-700 block">
                           Monto a Transferir
                         </span>
@@ -336,28 +237,16 @@ const ResumenTotalesFiltro = ({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center">
+                    <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center">
                       <div>
-                        <span className="text-slate-500 font-bold block">Máquina ($0.35)</span>
-                        <span className="font-black text-slate-800">
-                          {trabajador.armadurasMaquina.toLocaleString('es-ES')} uds.
-                        </span>
-                        <span className="block text-[11px] text-slate-500">
-                          {formatearMonedaUSD(trabajador.montoMaquinaUSD)}
+                        <span className="text-slate-500 font-bold block">Turnos Trabajados</span>
+                        <span className="font-black text-slate-900 text-sm">
+                          {trabajador.turnosParticipados}
                         </span>
                       </div>
                       <div>
-                        <span className="text-slate-500 font-bold block">Estabiliz. ($0.30)</span>
-                        <span className="font-black text-emerald-700">
-                          {trabajador.armadurasEstabilizadas.toLocaleString('es-ES')} uds.
-                        </span>
-                        <span className="block text-[11px] text-slate-500">
-                          {formatearMonedaUSD(trabajador.montoEstabilizadoUSD)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 font-bold block">Total Liquidadas</span>
-                        <span className="font-black text-slate-900">
+                        <span className="text-slate-500 font-bold block">Total Armaduras Realizadas</span>
+                        <span className="font-black text-slate-900 text-sm">
                           {trabajador.totalArmadurasLiquidadas.toLocaleString('es-ES')} uds.
                         </span>
                       </div>
@@ -367,7 +256,7 @@ const ResumenTotalesFiltro = ({
 
                 <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
                   <span className="text-xs font-extrabold uppercase tracking-wider text-slate-300">
-                    Total Nómina Acumulada
+                    Total Consolidado ({totalArmadurasLiquidadasGlobal.toLocaleString('es-ES')} uds.)
                   </span>
                   <span className="text-lg font-black text-emerald-400">
                     {formatearMonedaUSD(totalNominaUSD)}
@@ -375,16 +264,14 @@ const ResumenTotalesFiltro = ({
                 </div>
               </div>
 
-              {/* Vista Tablet / Escritorio: Tabla compacta */}
+              {/* Vista Tablet / Escritorio: Tabla simplificada de 4 columnas */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left border-collapse text-sm">
                   <thead className="bg-slate-100 text-slate-600 text-xs font-extrabold uppercase tracking-wider border-b border-slate-200">
                     <tr>
                       <th className="py-3 px-4">Nombre del Trabajador</th>
                       <th className="py-3 px-4 text-center">Turnos Trabajados</th>
-                      <th className="py-3 px-4 text-right">Armaduras Máquina ($0.35)</th>
-                      <th className="py-3 px-4 text-right">Armaduras Estabilizadas ($0.30)</th>
-                      <th className="py-3 px-4 text-right">Total Armaduras Liquidadas</th>
+                      <th className="py-3 px-4 text-right">Total Armaduras Realizadas</th>
                       <th className="py-3 px-4 text-right">Monto Total a Transferir ($ USD)</th>
                     </tr>
                   </thead>
@@ -397,24 +284,9 @@ const ResumenTotalesFiltro = ({
                             <span>{trabajador.nombre}</span>
                           </div>
                         </td>
-                        <td className="py-3.5 px-4 text-center text-xs font-bold text-slate-600">
-                          <span className="bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-                            {trabajador.turnosParticipados}{' '}
-                            {trabajador.turnosParticipados === 1 ? 'turno' : 'turnos'} (
-                            {trabajador.turnosEncargado} Enc. / {trabajador.turnosAcompanante}{' '}
-                            Acomp.)
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-bold text-slate-800">
-                          {trabajador.armadurasMaquina.toLocaleString('es-ES')} uds.{' '}
-                          <span className="text-xs text-slate-500 font-semibold block">
-                            {formatearMonedaUSD(trabajador.montoMaquinaUSD)}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-bold text-emerald-700">
-                          {trabajador.armadurasEstabilizadas.toLocaleString('es-ES')} uds.{' '}
-                          <span className="text-xs text-slate-500 font-semibold block">
-                            {formatearMonedaUSD(trabajador.montoEstabilizadoUSD)}
+                        <td className="py-3.5 px-4 text-center font-black text-slate-800">
+                          <span className="inline-block bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 text-xs font-extrabold">
+                            {trabajador.turnosParticipados}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right font-black text-slate-900">
@@ -432,18 +304,6 @@ const ResumenTotalesFiltro = ({
                     <tr>
                       <td colSpan="2" className="py-3.5 px-4 uppercase tracking-wider">
                         Total Consolidado de Nómina del Filtro
-                      </td>
-                      <td className="py-3.5 px-4 text-right text-slate-300">
-                        {listaTrabajadores
-                          .reduce((acc, t) => acc + t.armadurasMaquina, 0)
-                          .toLocaleString('es-ES')}{' '}
-                        uds.
-                      </td>
-                      <td className="py-3.5 px-4 text-right text-emerald-300">
-                        {listaTrabajadores
-                          .reduce((acc, t) => acc + t.armadurasEstabilizadas, 0)
-                          .toLocaleString('es-ES')}{' '}
-                        uds.
                       </td>
                       <td className="py-3.5 px-4 text-right text-white">
                         {totalArmadurasLiquidadasGlobal.toLocaleString('es-ES')} uds.

@@ -8,7 +8,7 @@ import {
   AlertCircle,
   Smartphone
 } from 'lucide-react';
-import { formatearFechaConDia } from '../utilidades/exportarExcel';
+import { formatearFechaConDia, obtenerResumenEquipoTurno } from '../utilidades/exportarExcel';
 
 /**
  * Barra superior de navegación móvil-primero (Mobile-First) con estado operativo,
@@ -24,6 +24,7 @@ const BarraNavegacion = ({
   alInstalarPWA
 }) => {
   const estaEnProgreso = turnoActual && turnoActual.estado === 'En Progreso';
+  const resumenEquipo = estaEnProgreso ? obtenerResumenEquipoTurno(turnoActual) : '';
 
   return (
     <header className="bg-slate-900 text-white shadow-lg border-b-4 border-blue-600 sticky top-0 z-30 w-full">
@@ -83,7 +84,7 @@ const BarraNavegacion = ({
                   <span className="text-slate-200 font-semibold">
                     {formatearFechaConDia(turnoActual.fecha)}
                   </span>{' '}
-                  · <span className="text-amber-300 font-semibold">{turnoActual.encargado}</span>
+                  · <span className="text-amber-300 font-semibold">{resumenEquipo}</span>
                   {turnoActual.horaApertura && (
                     <span className="text-emerald-300 font-bold">
                       {' '}

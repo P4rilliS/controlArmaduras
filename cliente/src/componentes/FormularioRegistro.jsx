@@ -3,6 +3,7 @@ import {
   Users,
   PlusCircle,
   UserCheck,
+  UserX,
   PackagePlus,
   Check,
   Lock,
@@ -15,7 +16,9 @@ import {
 import {
   obtenerFechaLocalISO,
   formatearFechaLegible,
-  calcularDuracionTurno
+  calcularDuracionTurno,
+  obtenerPuestosNormalizadosTurno,
+  obtenerResumenEquipoTurno
 } from '../utilidades/exportarExcel';
 
 /**
@@ -23,11 +26,11 @@ import {
  */
 export const NOMINA_TRABAJADORES = [
   'William',
+  'Leonardo',
   'Antoni',
   'Yervin',
   'Antonio',
-  'Wilkerman',
-  'Leonardo'
+  'Wilkerman'
 ];
 
 /**
@@ -49,8 +52,12 @@ export const obtenerFechaHoyISO = () => obtenerFechaLocalISO(new Date());
 
 /**
  * Componente modular Mobile-First que gestiona:
- * 1. Bloqueo estricto de apertura: si hay un turno "En Progreso", oculta el formulario
- *    de apertura y muestra directamente la cabecera del turno activo con su Hora de Inicio.
+ * 1. Apertura flexible de turno por puestos independientes:
+ *    - 1. Máquina (Encargado)
+ *    - 2. Anillador
+ *    - 3. Estabilizador
+ *    Cualquiera de los tres puestos puede marcarse como "[-- No vino / Sin asignar --]"
+ *    y el turno se abre con al menos 1 trabajador presente.
  * 2. Registro Parcial / Continuo de lotes de armaduras estabilizadas con hora automática.
  */
 const FormularioRegistro = ({
@@ -65,11 +72,11 @@ const FormularioRegistro = ({
   const turnoIniciado = Boolean(turnoActual && turnoActual._id);
   const enModoConsulta = turnoIniciado && !turnoCerrado && !esDispositivoAutorizado;
 
-  // Estado para los metadatos del turno y personal (nómina de 6 trabajadores)
+  // Estados para el tipo de turno y los 3 puestos esenciales de la línea operativa
   const [tipoTurno, setTipoTurno] = useState('Primer Turno');
-  const [encargado, setEncargado] = useState('');
-  const [acompananteUno, setAcompananteUno] = useState('');
-  const [acompananteDos, setAcompananteDos] = useState('');
+  const [trabajadorMaquina, setTrabajadorMaquina] = useState('');
+  const [trabajadorAnillador, setTrabajadorAnillador] = useState('');
+  const [trabajadorEstabilizador, setTrabajadorEstabilizador] = useState('');
 
   // Estado para el formulario de entrega parcial de armaduras estabilizadas
   const [cantidadParcial, setCantidadParcial] = useState('');
@@ -79,15 +86,25 @@ const FormularioRegistro = ({
   // Función auxiliar para restaurar los campos desde el turno activo
   const sincronizarCamposConTurno = useCallback((turno) => {
     if (turno) {
+      const { puestoMaquina, puestoAnillador, puestoEstabilizador } =
+        obtenerPuestosNormalizadosTurno(turno);
       setTipoTurno(turno.tipoTurno || 'Primer Turno');
-      setEncargado(turno.encargado || '');
-      setAcompananteUno(turno.operadores?.[0] || '');
-      setAcompananteDos(turno.operadores?.[1] || '');
+      setTrabajadorMaquina(
+        puestoMaquina.asistio && puestoMaquina.trabajador ? puestoMaquina.trabajador : ''
+      );
+      setTrabajadorAnillador(
+        puestoAnillador.asistio && puestoAnillador.trabajador ? puestoAnillador.trabajador : ''
+      );
+      setTrabajadorEstabilizador(
+        puestoEstabilizador.asistio && puestoEstabilizador.trabajador
+          ? puestoEstabilizador.trabajador
+          : ''
+      );
     } else {
       setTipoTurno('Primer Turno');
-      setEncargado('');
-      setAcompananteUno('');
-      setAcompananteDos('');
+      setTrabajadorMaquina('');
+      setTrabajadorAnillador('');
+      setTrabajadorEstabilizador('');
     }
   }, []);
 
@@ -104,9 +121,43 @@ const FormularioRegistro = ({
     turnoActual
   ]);
 
-  // Construye el arreglo limpio de acompañantes (vacío [] si trabaja solo, o con los elegidos)
-  const obtenerOperadoresSeleccionados = () => {
-    return [acompananteUno, acompananteDos].map((op) => op.trim()).filter(Boolean);
+  // Verifica si al menos un puesto tiene un trabajador seleccionado
+  const trabajadoresPresentesLista = [
+    trabajadorMaquina,
+    trabajadorAnillador,
+    trabajadorEstabilizador
+  ]
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+  const hayAlMenosUnPresente = trabajadoresPresentesLista.length > 0;
+
+  // Construye el payload estructurado de los 3 puestos manteniendo compatibilidad hacia atrás
+  const construirPayloadTurno = () => {
+    const maqLimpio = trabajadorMaquina.trim() || null;
+    const aniLimpio = trabajadorAnillador.trim() || null;
+    const estLimpio = trabajadorEstabilizador.trim() || null;
+
+    return {
+      tipoTurno,
+      puestoMaquina: {
+        trabajador: maqLimpio,
+        asistio: Boolean(maqLimpio),
+        tarifa: 0.35
+      },
+      puestoAnillador: {
+        trabajador: aniLimpio,
+        asistio: Boolean(aniLimpio),
+        tarifa: 0.30
+      },
+      puestoEstabilizador: {
+        trabajador: estLimpio,
+        asistio: Boolean(estLimpio),
+        tarifa: 0.30
+      },
+      encargado: maqLimpio,
+      operadores: [aniLimpio, estLimpio].filter(Boolean)
+    };
   };
 
   // Validar los campos del turno y las reglas de negocio del personal
@@ -115,19 +166,26 @@ const FormularioRegistro = ({
       setErrorFormulario('Seleccione obligatoriamente Primer Turno o Segundo Turno.');
       return false;
     }
-    if (!encargado || !NOMINA_TRABAJADORES.includes(encargado)) {
+
+    if (trabajadoresPresentesLista.length === 0) {
       setErrorFormulario(
-        'Debe seleccionar obligatoriamente al Encargado del Turno de la lista de personal.'
+        'Debe haber al menos un trabajador presente seleccionado en alguno de los 3 puestos para iniciar el turno.'
       );
       return false;
     }
 
-    const listaAcompanantes = obtenerOperadoresSeleccionados();
-    const todosLosSeleccionados = [encargado, ...listaAcompanantes];
+    for (const nombre of trabajadoresPresentesLista) {
+      if (!NOMINA_TRABAJADORES.includes(nombre)) {
+        setErrorFormulario(
+          `El trabajador "${nombre}" no pertenece a la nómina autorizada de planta.`
+        );
+        return false;
+      }
+    }
 
-    if (new Set(todosLosSeleccionados).size !== todosLosSeleccionados.length) {
+    if (new Set(trabajadoresPresentesLista).size !== trabajadoresPresentesLista.length) {
       setErrorFormulario(
-        'Una misma persona no puede ser seleccionada en más de un puesto dentro del mismo turno.'
+        'Una misma persona presente no puede ocupar dos puestos distintos simultáneamente.'
       );
       return false;
     }
@@ -136,17 +194,17 @@ const FormularioRegistro = ({
     return true;
   };
 
-  // Opciones disponibles para cada selector evitando duplicar personas ya elegidas
-  const opcionesParaEncargado = NOMINA_TRABAJADORES.filter(
-    (persona) => persona !== acompananteUno && persona !== acompananteDos
+  // Opciones disponibles para cada selector evitando duplicar personas ya elegidas en otro puesto
+  const opcionesParaMaquina = NOMINA_TRABAJADORES.filter(
+    (persona) => persona !== trabajadorAnillador && persona !== trabajadorEstabilizador
   );
 
-  const opcionesParaAcompananteUno = NOMINA_TRABAJADORES.filter(
-    (persona) => persona !== encargado && persona !== acompananteDos
+  const opcionesParaAnillador = NOMINA_TRABAJADORES.filter(
+    (persona) => persona !== trabajadorMaquina && persona !== trabajadorEstabilizador
   );
 
-  const opcionesParaAcompananteDos = NOMINA_TRABAJADORES.filter(
-    (persona) => persona !== encargado && persona !== acompananteUno
+  const opcionesParaEstabilizador = NOMINA_TRABAJADORES.filter(
+    (persona) => persona !== trabajadorMaquina && persona !== trabajadorAnillador
   );
 
   // Manejar inicio de turno (la fecha y hora de apertura se registran automáticamente)
@@ -160,11 +218,7 @@ const FormularioRegistro = ({
     }
     if (!validarDatosTurno()) return;
 
-    await alIniciarOActualizarTurno({
-      tipoTurno,
-      encargado,
-      operadores: obtenerOperadoresSeleccionados()
-    });
+    await alIniciarOActualizarTurno(construirPayloadTurno());
   };
 
   // Manejar envío de un lote parcial capturando la hora exacta de forma automática y transparente
@@ -188,12 +242,7 @@ const FormularioRegistro = ({
     setErrorFormulario('');
 
     const horaAutomatica = obtenerHoraAutomatica();
-
-    const datosCabecera = {
-      tipoTurno,
-      encargado,
-      operadores: obtenerOperadoresSeleccionados()
-    };
+    const datosCabecera = construirPayloadTurno();
 
     const registrado = await alAgregarParcial(
       {
@@ -224,7 +273,8 @@ const FormularioRegistro = ({
     'Revisión de calidad aprobada'
   ];
 
-  const operadoresGuardados = turnoActual?.operadores?.filter(Boolean) || [];
+  const puestosTurnoActual = obtenerPuestosNormalizadosTurno(turnoActual);
+  const resumenEquipoActivo = obtenerResumenEquipoTurno(turnoActual);
 
   return (
     <div className="space-y-5 w-full">
@@ -253,7 +303,7 @@ const FormularioRegistro = ({
             <h2 className="font-bold text-base sm:text-lg tracking-tight">
               {turnoIniciado
                 ? '1. Turno Activo en Planta'
-                : '1. Apertura de Turno y Personal'}
+                : '1. Apertura de Turno y Puestos de Línea'}
             </h2>
           </div>
 
@@ -272,7 +322,7 @@ const FormularioRegistro = ({
         </div>
 
         {/* Si ya hay un turno activo en planta, se bloquea el formulario de apertura
-            y se muestra directamente la información del turno en curso con su Hora de Inicio */}
+            y se muestra directamente la información de los 3 puestos y la Hora de Inicio */}
         {turnoIniciado ? (
           <div className="p-4 sm:p-5 bg-slate-50/70 space-y-4">
             {/* Banner de Hora de Inicio y Fecha del Turno Activo */}
@@ -297,29 +347,82 @@ const FormularioRegistro = ({
               </div>
             </div>
 
-            {/* Encargado y Acompañantes */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="bg-amber-50/80 p-3.5 rounded-xl border border-amber-200">
-                <span className="text-xs font-bold uppercase text-amber-700 block">
-                  Encargado de la Maquina (Responsable)
+            {/* Estado de Asistencia de los 3 Puestos Esenciales */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {/* Puesto 1: Máquina (Encargado) */}
+              <div
+                className={`p-3 rounded-xl border ${
+                  puestosTurnoActual.puestoMaquina.asistio &&
+                  puestosTurnoActual.puestoMaquina.trabajador
+                    ? 'bg-amber-50/80 border-amber-200'
+                    : 'bg-slate-100 border-slate-200'
+                }`}
+              >
+                <span className="text-[11px] font-extrabold uppercase text-slate-500 block">
+                  1. Máquina (Encargado)
                 </span>
-                <p className="text-base sm:text-lg font-extrabold text-slate-900 mt-0.5 flex items-center gap-1.5">
-                  <UserCheck className="w-5 h-5 text-amber-600 shrink-0" />
-                  <span>{turnoActual.encargado}</span>
-                </p>
-              </div>
-
-              <div className="bg-white p-3.5 rounded-xl border border-slate-200">
-                <span className="text-xs font-bold uppercase text-slate-400 block">
-                  Acompañantes del Turno
-                </span>
-                {operadoresGuardados.length === 0 ? (
-                  <p className="text-sm font-semibold text-slate-600 mt-1 italic">
-                    Ninguno (Trabaja solo)
+                {puestosTurnoActual.puestoMaquina.asistio &&
+                puestosTurnoActual.puestoMaquina.trabajador ? (
+                  <p className="text-sm sm:text-base font-black text-slate-900 mt-1 flex items-center gap-1.5">
+                    <UserCheck className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>{puestosTurnoActual.puestoMaquina.trabajador}</span>
                   </p>
                 ) : (
-                  <p className="text-base font-extrabold text-slate-800 mt-1">
-                    {operadoresGuardados.join(' · ')}
+                  <p className="text-xs font-bold text-rose-700 mt-1 flex items-center gap-1">
+                    <UserX className="w-3.5 h-3.5 shrink-0" />
+                    <span>Falta / No asistió</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Puesto 2: Anillador */}
+              <div
+                className={`p-3 rounded-xl border ${
+                  puestosTurnoActual.puestoAnillador.asistio &&
+                  puestosTurnoActual.puestoAnillador.trabajador
+                    ? 'bg-sky-50/80 border-sky-200'
+                    : 'bg-slate-100 border-slate-200'
+                }`}
+              >
+                <span className="text-[11px] font-extrabold uppercase text-slate-500 block">
+                  2. Anillador
+                </span>
+                {puestosTurnoActual.puestoAnillador.asistio &&
+                puestosTurnoActual.puestoAnillador.trabajador ? (
+                  <p className="text-sm sm:text-base font-black text-slate-900 mt-1 flex items-center gap-1.5">
+                    <UserCheck className="w-4 h-4 text-sky-600 shrink-0" />
+                    <span>{puestosTurnoActual.puestoAnillador.trabajador}</span>
+                  </p>
+                ) : (
+                  <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1">
+                    <UserX className="w-3.5 h-3.5 shrink-0" />
+                    <span>Falta / Sin asignar</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Puesto 3: Estabilizador */}
+              <div
+                className={`p-3 rounded-xl border ${
+                  puestosTurnoActual.puestoEstabilizador.asistio &&
+                  puestosTurnoActual.puestoEstabilizador.trabajador
+                    ? 'bg-emerald-50/80 border-emerald-200'
+                    : 'bg-slate-100 border-slate-200'
+                }`}
+              >
+                <span className="text-[11px] font-extrabold uppercase text-slate-500 block">
+                  3. Estabilizador
+                </span>
+                {puestosTurnoActual.puestoEstabilizador.asistio &&
+                puestosTurnoActual.puestoEstabilizador.trabajador ? (
+                  <p className="text-sm sm:text-base font-black text-slate-900 mt-1 flex items-center gap-1.5">
+                    <UserCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{puestosTurnoActual.puestoEstabilizador.trabajador}</span>
+                  </p>
+                ) : (
+                  <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1">
+                    <UserX className="w-3.5 h-3.5 shrink-0" />
+                    <span>Falta / Sin asignar</span>
                   </p>
                 )}
               </div>
@@ -365,7 +468,7 @@ const FormularioRegistro = ({
             )}
           </div>
         ) : (
-          /* Formulario de Apertura de Turno (solo visible cuando no existe un turno en progreso) */
+          /* Formulario de Apertura de Turno con los 3 Puestos Esenciales */
           <form onSubmit={manejarGuardarTurno} className="p-4 sm:p-5 space-y-5">
             {/* Selector Obligatorio de Turno */}
             <div>
@@ -394,23 +497,27 @@ const FormularioRegistro = ({
               </div>
             </div>
 
-            {/* Encargado del Turno (Obligatorio - Select de 6 trabajadores) */}
+            {/* 1. Puesto Máquina (Encargado) */}
             <div className="bg-amber-50/70 p-4 rounded-xl border border-amber-200">
-              <label
-                htmlFor="campo-encargado"
-                className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-amber-900 mb-1.5"
-              >
-                Encargado de la Maquina *
-              </label>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <label
+                  htmlFor="campo-puesto-maquina"
+                  className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-amber-900"
+                >
+                  1. Máquina (Encargado)
+                </label>
+                <span className="text-[11px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">
+                  {trabajadorMaquina ? 'Asistió' : 'Sin asignar / Falta'}
+                </span>
+              </div>
               <select
-                id="campo-encargado"
-                value={encargado}
-                onChange={(e) => setEncargado(e.target.value)}
-                required
-                className="w-full min-h-[50px] rounded-xl border-2 border-amber-300 bg-white px-4 py-3 text-base sm:text-lg font-bold text-slate-900 focus:border-amber-600 focus:outline-none cursor-pointer"
+                id="campo-puesto-maquina"
+                value={trabajadorMaquina}
+                onChange={(e) => setTrabajadorMaquina(e.target.value)}
+                className="w-full min-h-[50px] rounded-xl border-2 border-amber-300 bg-white px-4 py-3 text-base font-bold text-slate-900 focus:border-amber-600 focus:outline-none cursor-pointer"
               >
-                <option value="">-- Seleccione al Encargado de la Maquina --</option>
-                {opcionesParaEncargado.map((nombre) => (
+                <option value="">[-- No vino / Sin asignar --]</option>
+                {opcionesParaMaquina.map((nombre) => (
                   <option key={nombre} value={nombre}>
                     {nombre}
                   </option>
@@ -418,23 +525,28 @@ const FormularioRegistro = ({
               </select>
             </div>
 
-            {/* Acompañantes / Operadores Opcionales (Acompañante 1 y Acompañante 2) */}
+            {/* 2. Puesto Anillador y 3. Puesto Estabilizador */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor="campo-acompanante-1"
-                  className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-600 mb-1.5"
-                >
-                  Anillado (Opcional)
-                </label>
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <label
+                    htmlFor="campo-puesto-anillador"
+                    className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-700"
+                  >
+                    2. Anillador
+                  </label>
+                  <span className="text-[10px] font-bold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded">
+                    {trabajadorAnillador ? 'Asistió' : 'Falta'}
+                  </span>
+                </div>
                 <select
-                  id="campo-acompanante-1"
-                  value={acompananteUno}
-                  onChange={(e) => setAcompananteUno(e.target.value)}
-                  className="w-full min-h-[48px] rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-800 focus:border-amber-500 focus:outline-none cursor-pointer"
+                  id="campo-puesto-anillador"
+                  value={trabajadorAnillador}
+                  onChange={(e) => setTrabajadorAnillador(e.target.value)}
+                  className="w-full min-h-[48px] rounded-xl border-2 border-slate-300 bg-white px-3.5 py-2.5 text-base font-semibold text-slate-800 focus:border-amber-500 focus:outline-none cursor-pointer"
                 >
-                  <option value="">-- Ninguno / Trabaja solo --</option>
-                  {opcionesParaAcompananteUno.map((nombre) => (
+                  <option value="">[-- No vino / Sin asignar --]</option>
+                  {opcionesParaAnillador.map((nombre) => (
                     <option key={nombre} value={nombre}>
                       {nombre}
                     </option>
@@ -442,21 +554,26 @@ const FormularioRegistro = ({
                 </select>
               </div>
 
-              <div>
-                <label
-                  htmlFor="campo-acompanante-2"
-                  className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-600 mb-1.5"
-                >
-                  Estabilizado (Opcional)
-                </label>
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <label
+                    htmlFor="campo-puesto-estabilizador"
+                    className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-700"
+                  >
+                    3. Estabilizador
+                  </label>
+                  <span className="text-[10px] font-bold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded">
+                    {trabajadorEstabilizador ? 'Asistió' : 'Falta'}
+                  </span>
+                </div>
                 <select
-                  id="campo-acompanante-2"
-                  value={acompananteDos}
-                  onChange={(e) => setAcompananteDos(e.target.value)}
-                  className="w-full min-h-[48px] rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-800 focus:border-amber-500 focus:outline-none cursor-pointer"
+                  id="campo-puesto-estabilizador"
+                  value={trabajadorEstabilizador}
+                  onChange={(e) => setTrabajadorEstabilizador(e.target.value)}
+                  className="w-full min-h-[48px] rounded-xl border-2 border-slate-300 bg-white px-3.5 py-2.5 text-base font-semibold text-slate-800 focus:border-amber-500 focus:outline-none cursor-pointer"
                 >
-                  <option value="">-- Ninguno / Trabaja solo --</option>
-                  {opcionesParaAcompananteDos.map((nombre) => (
+                  <option value="">[-- No vino / Sin asignar --]</option>
+                  {opcionesParaEstabilizador.map((nombre) => (
                     <option key={nombre} value={nombre}>
                       {nombre}
                     </option>
@@ -466,13 +583,13 @@ const FormularioRegistro = ({
             </div>
 
             <p className="text-xs text-slate-500 font-medium">
-              * La fecha y la hora exacta de inicio se registran automáticamente al abrir el turno.
+              * Seleccione al menos un trabajador presente (1, 2 o los 3 puestos). Quien abra el turno registrará el control activo en este dispositivo.
             </p>
 
             <button
               type="submit"
-              disabled={cargandoAccion}
-              className="w-full min-h-[52px] inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-base shadow-md transition cursor-pointer disabled:opacity-50"
+              disabled={cargandoAccion || !hayAlMenosUnPresente}
+              className="w-full min-h-[52px] inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-base shadow-md transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <UserCheck className="w-5 h-5 text-amber-400 shrink-0" />
               <span>Iniciar Turno de Producción</span>
@@ -501,8 +618,8 @@ const FormularioRegistro = ({
 
           <div className="p-5 sm:p-6 bg-amber-50/40 space-y-4">
             <p className="text-sm sm:text-base font-semibold text-slate-800 leading-relaxed">
-              👀 <strong>Modo Consulta:</strong> Turno activo a cargo de{' '}
-              <strong className="text-amber-800">{turnoActual.encargado}</strong>. Los controles de
+              👀 <strong>Modo Consulta:</strong> Turno activo con el equipo{' '}
+              <strong className="text-amber-800">{resumenEquipoActivo}</strong>. Los controles de
               registro están bloqueados en este dispositivo para evitar modificaciones accidentales
               desde otros teléfonos o computadoras en planta.
             </p>

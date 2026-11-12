@@ -12,6 +12,46 @@ const generarTokenDispositivoServidor = () => {
   return `disp-${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
 };
 
+const NOMINA_TRABAJADORES = Turno.NOMINA_TRABAJADORES || [
+  'William',
+  'Leonardo',
+  'Antoni',
+  'Yervin',
+  'Antonio',
+  'Wilkerman'
+];
+
+// Tarifas oficiales de pago por producción en planta (USD)
+const TARIFA_MAQUINA = Turno.TARIFA_MAQUINA || 0.35;
+const TARIFA_ESTABILIZADA = Turno.TARIFA_ESTABILIZADA || 0.30;
+
+/**
+ * Obtiene una descripción legible de los trabajadores presentes en el turno
+ * (útil cuando el operador de máquina no asistió y el turno lo abrió el anillador o estabilizador).
+ */
+const obtenerDescripcionEquipoTurno = (turno) => {
+  if (!turno) return 'Equipo en planta';
+  const presentes = [];
+  if (turno.puestoMaquina?.asistio && turno.puestoMaquina?.trabajador) {
+    presentes.push(`${turno.puestoMaquina.trabajador} (Máquina)`);
+  } else if (turno.encargado) {
+    presentes.push(`${turno.encargado} (Máquina)`);
+  }
+
+  if (turno.puestoAnillador?.asistio && turno.puestoAnillador?.trabajador) {
+    presentes.push(`${turno.puestoAnillador.trabajador} (Anillador)`);
+  }
+  if (turno.puestoEstabilizador?.asistio && turno.puestoEstabilizador?.trabajador) {
+    presentes.push(`${turno.puestoEstabilizador.trabajador} (Estabilizador)`);
+  }
+
+  if (presentes.length === 0 && Array.isArray(turno.operadores)) {
+    turno.operadores.filter(Boolean).forEach((op) => presentes.push(op));
+  }
+
+  return presentes.length > 0 ? presentes.join(', ') : 'Equipo de planta';
+};
+
 /**
  * Verifica que el dispositivo que intenta modificar o cerrar el turno
  * posea el tokenDispositivo activo registrado en la base de datos.
@@ -28,93 +68,22 @@ const verificarControlDispositivo = (turno, req) => {
     '';
 
   if (String(turno.tokenDispositivo).trim() !== String(tokenEnviado).trim()) {
+    const responsable = obtenerDescripcionEquipoTurno(turno);
     return {
       autorizado: false,
-      mensaje: `Modo Consulta: Turno activo a cargo de ${turno.encargado}. Los controles de registro están bloqueados en este dispositivo.`
+      mensaje: `Modo Consulta: Turno activo a cargo de ${responsable}. Los controles de registro están bloqueados en este dispositivo.`
     };
   }
 
   return { autorizado: true };
 };
 
-const NOMINA_TRABAJADORES = Turno.NOMINA_TRABAJADORES || [
-  'William',
-  'Antoni',
-  'Yervin',
-  'Antonio',
-  'Wilkerman',
-  'Leonardo'
-];
-
-// Tarifas oficiales de pago por producción en planta (USD)
-const TARIFA_MAQUINA = 0.35;
-const TARIFA_ESTABILIZADA = 0.30;
-
 /**
  * Calcula automáticamente la liquidación y nómina individual y total del turno
- * según el número de acompañantes presentes en el arreglo de operadores:
- * - Escenario A (0 acompañantes): Encargado cobra (contadorMaquina * 0.45) + (totalEstabilizadas * 0.30).
- * - Escenario B (1 acompañante): Encargado cobra (contadorMaquina * 0.45) y Acompañante 1 cobra (totalEstabilizadas * 0.30).
- * - Escenario C (2 acompañantes): Encargado cobra (contadorMaquina * 0.45), Acompañante 1 cobra (totalEstabilizadas * 0.30) y Acompañante 2 cobra (totalEstabilizadas * 0.30).
+ * delegando en la regla estricta de puestos (`Turno.calcularLiquidacionDesdePuestos`).
  */
-const calcularLiquidacionTurno = ({
-  encargado,
-  operadores = [],
-  contadorMaquina = 0,
-  totalEstabilizadas = 0
-}) => {
-  const cantidadMaquina = Number(contadorMaquina) || 0;
-  const cantidadEstabilizadas = Number(totalEstabilizadas) || 0;
-  const listaAcompanantes = Array.isArray(operadores)
-    ? operadores.map((op) => (op ? String(op).trim() : '')).filter(Boolean)
-    : [];
-
-  const pagosPersonal = [];
-
-  if (listaAcompanantes.length === 0) {
-    // Escenario A: El Encargado trabajó completamente SOLO (0 acompañantes)
-    const pagoMaquina = cantidadMaquina * TARIFA_MAQUINA;
-    const pagoEstabilizado = cantidadEstabilizadas * TARIFA_ESTABILIZADA;
-    const montoEncargado = Number((pagoMaquina + pagoEstabilizado).toFixed(2));
-
-    pagosPersonal.push({
-      nombre: encargado,
-      rol: 'Encargado',
-      concepto: 'Máquina + Estabilizado',
-      montoPagar: montoEncargado
-    });
-  } else {
-    // Escenario B (1 acompañante) y Escenario C (2 acompañantes)
-    const montoEncargado = Number((cantidadMaquina * TARIFA_MAQUINA).toFixed(2));
-    const montoPorAcompanante = Number((cantidadEstabilizadas * TARIFA_ESTABILIZADA).toFixed(2));
-
-    pagosPersonal.push({
-      nombre: encargado,
-      rol: 'Encargado',
-      concepto: 'Máquina',
-      montoPagar: montoEncargado
-    });
-
-    listaAcompanantes.forEach((nombreAcompanante) => {
-      pagosPersonal.push({
-        nombre: nombreAcompanante,
-        rol: 'Acompañante',
-        concepto: 'Estabilizado',
-        montoPagar: montoPorAcompanante
-      });
-    });
-  }
-
-  const totalNominaTurno = Number(
-    pagosPersonal.reduce((acumulado, pago) => acumulado + (Number(pago.montoPagar) || 0), 0).toFixed(2)
-  );
-
-  return {
-    tarifaMaquina: TARIFA_MAQUINA,
-    tarifaEstabilizada: TARIFA_ESTABILIZADA,
-    pagosPersonal,
-    totalNominaTurno
-  };
+const calcularLiquidacionTurno = (datosTurno) => {
+  return Turno.calcularLiquidacionDesdePuestos(datosTurno);
 };
 
 /**
@@ -130,60 +99,107 @@ const formatearHoraServidor = (fecha = new Date()) => {
 };
 
 /**
- * Normaliza y valida el encargado y la lista opcional de acompañantes (operadores)
- * según las reglas de negocio de nómina cerrada.
+ * Normaliza y valida los 3 puestos operativos (`puestoMaquina`, `puestoAnillador`, `puestoEstabilizador`)
+ * manteniendo compatibilidad total con llamadas que envíen `encargado` y `operadores`.
+ * Reglas:
+ * 1. Cada puesto con trabajador asignado debe pertenecer a `NOMINA_TRABAJADORES`.
+ * 2. Debe existir AL MENOS UN trabajador presente (`asistio: true`) para abrir o actualizar el turno.
+ * 3. Unicidad: una misma persona presente no puede ocupar dos puestos simultáneamente.
  */
-const normalizarYValidarPersonal = (encargado, operadores) => {
-  const encargadoLimpio = encargado ? String(encargado).trim() : '';
-
-  if (!encargadoLimpio) {
-    return {
-      valido: false,
-      mensaje: 'El Encargado del Turno es obligatorio.'
+const normalizarYValidarPersonal = (entradaPrincipal, operadoresLegados) => {
+  let payload = {};
+  if (
+    entradaPrincipal &&
+    typeof entradaPrincipal === 'object' &&
+    !Array.isArray(entradaPrincipal)
+  ) {
+    payload = entradaPrincipal;
+  } else {
+    payload = {
+      encargado: entradaPrincipal,
+      operadores: operadoresLegados
     };
   }
 
-  if (!NOMINA_TRABAJADORES.includes(encargadoLimpio)) {
-    return {
-      valido: false,
-      mensaje: `El encargado "${encargadoLimpio}" no pertenece a la nómina autorizada (${NOMINA_TRABAJADORES.join(', ')}).`
-    };
-  }
+  const tienePuestosExplicitos =
+    payload.puestoMaquina !== undefined ||
+    payload.puestoAnillador !== undefined ||
+    payload.puestoEstabilizador !== undefined;
 
-  // Filtrar cadenas vacías en caso de que el frontend envíe "" para "Ninguno / Trabaja solo"
-  const listaOperadoresLimpia = Array.isArray(operadores)
-    ? operadores.map((op) => (op ? String(op).trim() : '')).filter(Boolean)
+  const listaOps = Array.isArray(payload.operadores)
+    ? payload.operadores.map((op) => (op ? String(op).trim() : '')).filter(Boolean)
     : [];
 
-  if (listaOperadoresLimpia.length > 2) {
-    return {
-      valido: false,
-      mensaje: 'Solo se permiten como máximo 2 acompañantes además del encargado.'
-    };
-  }
+  const puestoMaquina = Turno.normalizarObjetoPuesto(
+    tienePuestosExplicitos ? payload.puestoMaquina : payload.encargado,
+    TARIFA_MAQUINA
+  );
+  const puestoAnillador = Turno.normalizarObjetoPuesto(
+    tienePuestosExplicitos ? payload.puestoAnillador : listaOps[0] || null,
+    TARIFA_ESTABILIZADA
+  );
+  const puestoEstabilizador = Turno.normalizarObjetoPuesto(
+    tienePuestosExplicitos ? payload.puestoEstabilizador : listaOps[1] || null,
+    TARIFA_ESTABILIZADA
+  );
 
-  for (const nombreOperador of listaOperadoresLimpia) {
-    if (!NOMINA_TRABAJADORES.includes(nombreOperador)) {
+  const definicionPuestos = [
+    { etiqueta: 'Máquina (Encargado)', datos: puestoMaquina },
+    { etiqueta: 'Anillador', datos: puestoAnillador },
+    { etiqueta: 'Estabilizador', datos: puestoEstabilizador }
+  ];
+
+  for (const item of definicionPuestos) {
+    if (item.datos.trabajador && !NOMINA_TRABAJADORES.includes(item.datos.trabajador)) {
       return {
         valido: false,
-        mensaje: `El acompañante "${nombreOperador}" no pertenece a la nómina autorizada (${NOMINA_TRABAJADORES.join(', ')}).`
+        mensaje: `El trabajador "${item.datos.trabajador}" en el puesto de ${item.etiqueta} no pertenece a la nómina autorizada (${NOMINA_TRABAJADORES.join(', ')}).`
+      };
+    }
+    if (item.datos.asistio && !item.datos.trabajador) {
+      return {
+        valido: false,
+        mensaje: `El puesto de ${item.etiqueta} marca asistencia pero no tiene un trabajador asignado.`
       };
     }
   }
 
-  const todosLosSeleccionados = [encargadoLimpio, ...listaOperadoresLimpia];
-  if (new Set(todosLosSeleccionados).size !== todosLosSeleccionados.length) {
+  const presentes = definicionPuestos
+    .filter((item) => item.datos.asistio && item.datos.trabajador)
+    .map((item) => item.datos.trabajador);
+
+  if (presentes.length === 0) {
     return {
       valido: false,
       mensaje:
-        'No se puede seleccionar a la misma persona en más de un puesto (Encargado / Acompañantes).'
+        'Debe seleccionar al menos un trabajador presente en alguno de los 3 puestos (Máquina, Anillador o Estabilizador) para abrir el turno.'
     };
   }
 
+  if (new Set(presentes).size !== presentes.length) {
+    return {
+      valido: false,
+      mensaje:
+        'Una misma persona no puede ocupar más de un puesto simultáneamente en el mismo turno.'
+    };
+  }
+
+  const encargadoSincronizado =
+    puestoMaquina.asistio && puestoMaquina.trabajador ? puestoMaquina.trabajador : null;
+  const operadoresSincronizados = [
+    puestoAnillador.asistio && puestoAnillador.trabajador ? puestoAnillador.trabajador : null,
+    puestoEstabilizador.asistio && puestoEstabilizador.trabajador
+      ? puestoEstabilizador.trabajador
+      : null
+  ].filter(Boolean);
+
   return {
     valido: true,
-    encargado: encargadoLimpio,
-    operadores: listaOperadoresLimpia
+    puestoMaquina,
+    puestoAnillador,
+    puestoEstabilizador,
+    encargado: encargadoSincronizado,
+    operadores: operadoresSincronizados
   };
 };
 
@@ -216,6 +232,53 @@ const parsearFechaSegura = (fecha) => {
 };
 
 /**
+ * Asegura que un objeto de turno contenga siempre los 3 puestos normalizados
+ * incluso si proviene de un registro histórico legado en MongoDB.
+ */
+const asegurarPuestosEnObjetoTurno = (objetoTurno) => {
+  if (!objetoTurno) return objetoTurno;
+  const opsLegados = Array.isArray(objetoTurno.operadores) ? objetoTurno.operadores : [];
+
+  const tienePuestos =
+    (objetoTurno.puestoMaquina &&
+      (objetoTurno.puestoMaquina.trabajador || objetoTurno.puestoMaquina.asistio)) ||
+    (objetoTurno.puestoAnillador &&
+      (objetoTurno.puestoAnillador.trabajador || objetoTurno.puestoAnillador.asistio)) ||
+    (objetoTurno.puestoEstabilizador &&
+      (objetoTurno.puestoEstabilizador.trabajador || objetoTurno.puestoEstabilizador.asistio));
+
+  if (!tienePuestos && (objetoTurno.encargado || opsLegados.length > 0)) {
+    objetoTurno.puestoMaquina = Turno.normalizarObjetoPuesto(
+      objetoTurno.encargado,
+      TARIFA_MAQUINA
+    );
+    objetoTurno.puestoAnillador = Turno.normalizarObjetoPuesto(
+      opsLegados[0] || null,
+      TARIFA_ESTABILIZADA
+    );
+    objetoTurno.puestoEstabilizador = Turno.normalizarObjetoPuesto(
+      opsLegados[1] || null,
+      TARIFA_ESTABILIZADA
+    );
+  } else {
+    objetoTurno.puestoMaquina = Turno.normalizarObjetoPuesto(
+      objetoTurno.puestoMaquina,
+      TARIFA_MAQUINA
+    );
+    objetoTurno.puestoAnillador = Turno.normalizarObjetoPuesto(
+      objetoTurno.puestoAnillador,
+      TARIFA_ESTABILIZADA
+    );
+    objetoTurno.puestoEstabilizador = Turno.normalizarObjetoPuesto(
+      objetoTurno.puestoEstabilizador,
+      TARIFA_ESTABILIZADA
+    );
+  }
+
+  return objetoTurno;
+};
+
+/**
  * Oculta estrictamente el objeto de liquidación financiera en todas las respuestas
  * públicas dirigidas a los operadores de planta por confidencialidad.
  */
@@ -223,7 +286,7 @@ const ocultarLiquidacionParaOperador = (docTurno) => {
   if (!docTurno) return null;
   const objeto = docTurno.toObject ? docTurno.toObject() : { ...docTurno };
   delete objeto.liquidacion;
-  return objeto;
+  return asegurarPuestosEnObjetoTurno(objeto);
 };
 
 /**
@@ -258,7 +321,15 @@ const obtenerTurnoActivo = async (req, res) => {
  */
 const iniciarTurno = async (req, res) => {
   try {
-    const { tipoTurno, encargado, operadores, tokenDispositivo } = req.body;
+    const {
+      tipoTurno,
+      puestoMaquina,
+      puestoAnillador,
+      puestoEstabilizador,
+      encargado,
+      operadores,
+      tokenDispositivo
+    } = req.body;
 
     // 1. Regla de Turno Único Activo (Bloqueo Estricto con HTTP 400)
     const turnoAbiertoExistente = await Turno.findOne({ estado: 'En Progreso' }).sort({
@@ -280,7 +351,13 @@ const iniciarTurno = async (req, res) => {
       });
     }
 
-    const validacionPersonal = normalizarYValidarPersonal(encargado, operadores);
+    const validacionPersonal = normalizarYValidarPersonal({
+      puestoMaquina,
+      puestoAnillador,
+      puestoEstabilizador,
+      encargado,
+      operadores
+    });
     if (!validacionPersonal.valido) {
       return res.status(400).json({
         exito: false,
@@ -303,6 +380,9 @@ const iniciarTurno = async (req, res) => {
       fechaCierre: null,
       horaCierre: '',
       tipoTurno,
+      puestoMaquina: validacionPersonal.puestoMaquina,
+      puestoAnillador: validacionPersonal.puestoAnillador,
+      puestoEstabilizador: validacionPersonal.puestoEstabilizador,
       encargado: validacionPersonal.encargado,
       operadores: validacionPersonal.operadores,
       registrosParciales: [],
@@ -315,9 +395,11 @@ const iniciarTurno = async (req, res) => {
 
     await nuevoTurno.save();
 
+    const responsableEquipo = obtenerDescripcionEquipoTurno(nuevoTurno);
+
     return res.status(201).json({
       exito: true,
-      mensaje: `${tipoTurno} iniciado a las ${horaApertura} a cargo de ${nuevoTurno.encargado}.`,
+      mensaje: `${tipoTurno} iniciado a las ${horaApertura} (${responsableEquipo}).`,
       turno: ocultarLiquidacionParaOperador(nuevoTurno)
     });
   } catch (error) {
@@ -338,7 +420,14 @@ const iniciarTurno = async (req, res) => {
 const actualizarDatosTurno = async (req, res) => {
   try {
     const { id } = req.params;
-    const { tipoTurno, encargado, operadores } = req.body;
+    const {
+      tipoTurno,
+      puestoMaquina,
+      puestoAnillador,
+      puestoEstabilizador,
+      encargado,
+      operadores
+    } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -380,10 +469,14 @@ const actualizarDatosTurno = async (req, res) => {
       turno.tipoTurno = tipoTurno;
     }
 
-    const encargadoObjetivo = encargado !== undefined ? encargado : turno.encargado;
-    const operadoresObjetivo = operadores !== undefined ? operadores : turno.operadores;
-
-    const validacionPersonal = normalizarYValidarPersonal(encargadoObjetivo, operadoresObjetivo);
+    const validacionPersonal = normalizarYValidarPersonal({
+      puestoMaquina: puestoMaquina !== undefined ? puestoMaquina : turno.puestoMaquina,
+      puestoAnillador: puestoAnillador !== undefined ? puestoAnillador : turno.puestoAnillador,
+      puestoEstabilizador:
+        puestoEstabilizador !== undefined ? puestoEstabilizador : turno.puestoEstabilizador,
+      encargado: encargado !== undefined ? encargado : turno.encargado,
+      operadores: operadores !== undefined ? operadores : turno.operadores
+    });
     if (!validacionPersonal.valido) {
       return res.status(400).json({
         exito: false,
@@ -391,6 +484,9 @@ const actualizarDatosTurno = async (req, res) => {
       });
     }
 
+    turno.puestoMaquina = validacionPersonal.puestoMaquina;
+    turno.puestoAnillador = validacionPersonal.puestoAnillador;
+    turno.puestoEstabilizador = validacionPersonal.puestoEstabilizador;
     turno.encargado = validacionPersonal.encargado;
     turno.operadores = validacionPersonal.operadores;
 
@@ -398,7 +494,7 @@ const actualizarDatosTurno = async (req, res) => {
 
     return res.status(200).json({
       exito: true,
-      mensaje: 'Datos del turno actualizados correctamente.',
+      mensaje: 'Datos de los puestos y del turno actualizados correctamente.',
       turno: ocultarLiquidacionParaOperador(turno)
     });
   } catch (error) {
@@ -618,21 +714,13 @@ const cerrarTurno = async (req, res) => {
       0
     );
 
-    // Calcular liquidación de nómina según dotación del turno (Escenarios A, B o C)
-    const liquidacionCalculada = calcularLiquidacionTurno({
-      encargado: turno.encargado,
-      operadores: turno.operadores,
-      contadorMaquina: contadorFinal,
-      totalEstabilizadas: sumaEstabilizadas
-    });
-
     turno.contadorMaquina = contadorFinal;
     turno.totalEstabilizadas = sumaEstabilizadas;
     turno.diferencia = contadorFinal - sumaEstabilizadas;
-    turno.liquidacion = liquidacionCalculada;
     turno.fechaCierre = ahora;
     turno.horaCierre = horaCierre;
     turno.estado = 'Cerrado';
+    turno.liquidacion = calcularLiquidacionTurno(turno);
 
     // El hook pre('save') valida y guarda el consolidado junto con la liquidación confidencial en MongoDB
     await turno.save();
@@ -721,13 +809,22 @@ const guardarYCerrarTurnoDirecto = async (req, res) => {
       fechaApertura,
       horaApertura,
       tipoTurno,
+      puestoMaquina,
+      puestoAnillador,
+      puestoEstabilizador,
       encargado,
       operadores,
       registrosParciales,
       contadorMaquina
     } = req.body;
 
-    const validacionPersonal = normalizarYValidarPersonal(encargado, operadores);
+    const validacionPersonal = normalizarYValidarPersonal({
+      puestoMaquina,
+      puestoAnillador,
+      puestoEstabilizador,
+      encargado,
+      operadores
+    });
     if (!validacionPersonal.valido) {
       return res.status(400).json({
         exito: false,
@@ -768,6 +865,9 @@ const guardarYCerrarTurnoDirecto = async (req, res) => {
     );
 
     const liquidacionCalculada = calcularLiquidacionTurno({
+      puestoMaquina: validacionPersonal.puestoMaquina,
+      puestoAnillador: validacionPersonal.puestoAnillador,
+      puestoEstabilizador: validacionPersonal.puestoEstabilizador,
       encargado: validacionPersonal.encargado,
       operadores: validacionPersonal.operadores,
       contadorMaquina: contadorFinal,
@@ -784,6 +884,9 @@ const guardarYCerrarTurnoDirecto = async (req, res) => {
       fechaCierre: ahora,
       horaCierre: horaPorDefecto,
       tipoTurno,
+      puestoMaquina: validacionPersonal.puestoMaquina,
+      puestoAnillador: validacionPersonal.puestoAnillador,
+      puestoEstabilizador: validacionPersonal.puestoEstabilizador,
       encargado: validacionPersonal.encargado,
       operadores: validacionPersonal.operadores,
       registrosParciales: parcialesLimpios,
@@ -884,19 +987,7 @@ const obtenerEstadisticasEHistorial = async (req, res) => {
           totalNominaTurno: 0
         };
       }
-      if (
-        t.liquidacion &&
-        Array.isArray(t.liquidacion.pagosPersonal) &&
-        t.liquidacion.pagosPersonal.length > 0
-      ) {
-        return t.liquidacion;
-      }
-      return calcularLiquidacionTurno({
-        encargado: t.encargado,
-        operadores: t.operadores,
-        contadorMaquina: t.contadorMaquina,
-        totalEstabilizadas: t.totalEstabilizadas
-      });
+      return calcularLiquidacionTurno(t);
     };
 
     const turnosRecientesHoy = turnosRecientes.filter(
@@ -954,7 +1045,8 @@ const obtenerEstadisticasEHistorial = async (req, res) => {
     };
 
     const turnosNormalizados = turnosFiltrados.map((docTurno) => {
-      const turno = docTurno.toObject ? docTurno.toObject() : docTurno;
+      const turnoBase = docTurno.toObject ? docTurno.toObject() : docTurno;
+      const turno = asegurarPuestosEnObjetoTurno(turnoBase);
       const estabilizadas = Number(turno.totalEstabilizadas) || 0;
       const estaCerrado = turno.estado === 'Cerrado';
       const maquina = estaCerrado ? Number(turno.contadorMaquina) || 0 : 0;
