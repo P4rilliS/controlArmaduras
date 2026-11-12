@@ -929,11 +929,11 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                               </div>
                             </td>
 
-                            {/* Columna 3: Puestos y Asistencia */}
+                            {/* Columna 3: Puestos y Asistencia (Alineación vertical estricta en 3 filas) */}
                             <td className="w-[26%] min-w-[230px] py-3.5 px-3 align-middle">
-                              <div className="flex flex-wrap items-center gap-1.5">
+                              <div className="flex flex-col items-start gap-1.5">
                                 <span
-                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border whitespace-nowrap ${
+                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-md border whitespace-nowrap ${
                                     maqPresente
                                       ? 'bg-amber-50 text-amber-950 border-amber-200'
                                       : 'bg-slate-100 text-slate-500 border-slate-200'
@@ -950,7 +950,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                 </span>
 
                                 <span
-                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border whitespace-nowrap ${
+                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-md border whitespace-nowrap ${
                                     aniPresente
                                       ? 'bg-sky-50 text-sky-950 border-sky-200'
                                       : 'bg-slate-100 text-slate-500 border-slate-200'
@@ -967,7 +967,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                                 </span>
 
                                 <span
-                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border whitespace-nowrap ${
+                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-md border whitespace-nowrap ${
                                     estPresente
                                       ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
                                       : 'bg-slate-100 text-slate-500 border-slate-200'
