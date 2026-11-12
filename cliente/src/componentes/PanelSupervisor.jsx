@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   BarChart3,
   Download,
@@ -49,12 +49,14 @@ const calcularRangoSemanaCorte = () => {
  * Sumatoria y Resumen Consolidado Reactivo, Auditoría Hora a Hora y Exportación a Excel/CSV).
  */
 const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
-  const rangoInicialCorte = useMemo(() => calcularRangoSemanaCorte(), []);
+  // Inicialización pura y única al montar el componente: Semana de Corte (Vie-Jue)
+  const [rangoInicialCorte] = useState(() => calcularRangoSemanaCorte());
 
   const [fechaInicio, setFechaInicio] = useState(rangoInicialCorte.fechaInicio);
   const [fechaFin, setFechaFin] = useState(rangoInicialCorte.fechaFin);
   const [tipoTurno, setTipoTurno] = useState('Todos');
   const [estadoTurno, setEstadoTurno] = useState('Todos');
+  const [filtroActivo, setFiltroActivo] = useState('semana_corte');
   const [cicloSeleccionado, setCicloSeleccionado] = useState(rangoInicialCorte.etiqueta);
 
   const [todosLosTurnos, setTodosLosTurnos] = useState([]);
@@ -62,33 +64,54 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
   const [cargando, setCargando] = useState(false);
   const [avisoModoLocal, setAvisoModoLocal] = useState(false);
 
-  // Filtro activo por defecto al montar el componente: Semana de Corte (Vie-Jue)
+  // Referencia mutable para el respaldo local de modo que el polling de Aplicacion.jsx
+  // nunca recree callbacks ni reinicie los filtros activos del supervisor
+  const respaldoLocalRef = useRef(turnosRespaldoLocal);
+  useEffect(() => {
+    respaldoLocalRef.current = turnosRespaldoLocal;
+  }, [turnosRespaldoLocal]);
+
+  // Acción explícita de botón: aplicar filtro "Semana de Corte (Vie-Jue)"
   const aplicarFiltroSemanaCorte = useCallback(() => {
     const rango = calcularRangoSemanaCorte();
     setFechaInicio(rango.fechaInicio);
     setFechaFin(rango.fechaFin);
+    setFiltroActivo('semana_corte');
     setCicloSeleccionado(rango.etiqueta);
   }, []);
 
-  // Cargar historial completo desde la API de MongoDB (el filtrado y sumatoria se hacen reactivamente en cliente con useMemo)
-  const cargarEstadisticas = useCallback(async () => {
-    setCargando(true);
-    try {
-      const respuesta = await obtenerDatosSupervisor(claveSupervisor, {});
-      setTodosLosTurnos(respuesta.turnos || []);
-      setAvisoModoLocal(false);
-    } catch {
-      setTodosLosTurnos(turnosRespaldoLocal || []);
-      setAvisoModoLocal(true);
-    } finally {
-      setCargando(false);
-    }
-  }, [claveSupervisor, turnosRespaldoLocal]);
+  // Cargar únicamente el arreglo crudo de turnos desde el backend sin tocar jamás los estados de filtro
+  const cargarEstadisticas = useCallback(
+    async (silencioso = false) => {
+      if (!silencioso) {
+        setCargando(true);
+      }
+      try {
+        const respuesta = await obtenerDatosSupervisor(claveSupervisor, {});
+        setTodosLosTurnos(respuesta.turnos || []);
+        setAvisoModoLocal(false);
+      } catch {
+        setTodosLosTurnos(respaldoLocalRef.current || []);
+        setAvisoModoLocal(true);
+      } finally {
+        if (!silencioso) {
+          setCargando(false);
+        }
+      }
+    },
+    [claveSupervisor]
+  );
 
+  // Efecto de carga inicial y refresco periódico desacoplado (nunca pisa fechaInicio, fechaFin ni filtroActivo)
   useEffect(() => {
-    aplicarFiltroSemanaCorte();
-    cargarEstadisticas();
-  }, [aplicarFiltroSemanaCorte, cargarEstadisticas]);
+    cargarEstadisticas(false);
+
+    const intervaloRefresco = setInterval(() => {
+      cargarEstadisticas(true);
+    }, 5000);
+
+    return () => clearInterval(intervaloRefresco);
+  }, [cargarEstadisticas]);
 
   // Arreglo de turnos filtrados reactivamente al instante según fechas, ciclo, tipo de turno y estado
   const turnosFiltrados = useMemo(() => {
@@ -176,6 +199,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
     const hoy = obtenerFechaHoyISO();
     setFechaInicio(hoy);
     setFechaFin(hoy);
+    setFiltroActivo('hoy');
     setCicloSeleccionado('Hoy');
   };
 
@@ -184,6 +208,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
     setFechaFin('');
     setTipoTurno('Todos');
     setEstadoTurno('Todos');
+    setFiltroActivo('todos');
     setCicloSeleccionado('Todos los registros');
   };
 
@@ -213,7 +238,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
           <button
             type="button"
-            onClick={cargarEstadisticas}
+            onClick={() => cargarEstadisticas(false)}
             disabled={cargando}
             className="min-h-[48px] inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm sm:text-base border border-slate-700 transition cursor-pointer"
           >
@@ -371,21 +396,33 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
             <button
               type="button"
               onClick={aplicarFiltroHoy}
-              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs sm:text-sm transition cursor-pointer"
+              className={`min-h-[44px] px-3.5 py-2 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer ${
+                filtroActivo === 'hoy'
+                  ? 'bg-amber-500 text-slate-950 font-extrabold shadow-xs ring-2 ring-amber-600'
+                  : 'bg-amber-100 hover:bg-amber-200 text-amber-900'
+              }`}
             >
               Hoy
             </button>
             <button
               type="button"
               onClick={aplicarFiltroSemanaCorte}
-              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-extrabold text-xs sm:text-sm transition cursor-pointer"
+              className={`min-h-[44px] px-3.5 py-2 rounded-xl font-extrabold text-xs sm:text-sm transition cursor-pointer ${
+                filtroActivo === 'semana_corte'
+                  ? 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-700'
+                  : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-900'
+              }`}
             >
               Semana de Corte (Vie-Jue)
             </button>
             <button
               type="button"
               onClick={limpiarFiltros}
-              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm transition cursor-pointer"
+              className={`min-h-[44px] px-3.5 py-2 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer ${
+                filtroActivo === 'todos'
+                  ? 'bg-slate-900 text-white font-extrabold shadow-xs ring-2 ring-slate-950'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+              }`}
             >
               Ver Todo
             </button>
@@ -402,6 +439,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
               value={fechaInicio}
               onChange={(e) => {
                 setFechaInicio(e.target.value);
+                setFiltroActivo('personalizado');
                 setCicloSeleccionado('Rango personalizado');
               }}
               className="w-full min-h-[48px] rounded-xl border border-slate-300 px-3.5 py-2.5 text-base font-semibold text-slate-800"
@@ -417,6 +455,7 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
               value={fechaFin}
               onChange={(e) => {
                 setFechaFin(e.target.value);
+                setFiltroActivo('personalizado');
                 setCicloSeleccionado('Rango personalizado');
               }}
               className="w-full min-h-[48px] rounded-xl border border-slate-300 px-3.5 py-2.5 text-base font-semibold text-slate-800"

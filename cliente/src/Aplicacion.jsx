@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import BarraNavegacion from './componentes/BarraNavegacion';
 import FormularioRegistro, { obtenerHoraAutomatica } from './componentes/FormularioRegistro';
 import TablaParciales from './componentes/TablaParciales';
@@ -593,13 +593,17 @@ const Aplicacion = () => {
     }
   };
 
-  // Combinar historial local con el turno actual para el modo respaldo
-  const listaRespaldoParaSupervisor = turnoActual
-    ? [
-        turnoActual,
-        ...historialLocal.filter((t) => t._id !== turnoActual._id)
-      ]
-    : historialLocal;
+  // Combinar historial local con el turno actual para el modo respaldo (memoizado para evitar recreaciones en cada polling)
+  const listaRespaldoParaSupervisor = useMemo(
+    () =>
+      turnoActual
+        ? [
+            turnoActual,
+            ...historialLocal.filter((t) => t._id !== turnoActual._id)
+          ]
+        : historialLocal,
+    [turnoActual, historialLocal]
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-100 w-full overflow-x-hidden">
