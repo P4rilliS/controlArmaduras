@@ -504,7 +504,7 @@ const FormularioRegistro = ({
                   htmlFor="campo-puesto-maquina"
                   className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-amber-900"
                 >
-                  1. Máquina (Encargado)
+                  1. Máquina
                 </label>
                 <span className="text-[11px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">
                   {trabajadorMaquina ? 'Asistió' : 'Sin asignar / Falta'}
