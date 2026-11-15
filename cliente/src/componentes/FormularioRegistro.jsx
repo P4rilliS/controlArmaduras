@@ -600,160 +600,162 @@ const FormularioRegistro = ({
 
       {/* =====================================================================
           SECCIÓN 2: REGISTRO PARCIAL / CONTINUO DE ARMADURAS ESTABILIZADAS
-          (OCULTO / BLOQUEADO EN DISPOSITIVOS EN MODO CONSULTA)
+          (SOLO SE RENDERIZA CUANDO EXISTE UN TURNO ACTIVO EN PROGRESO)
          ===================================================================== */}
-      {enModoConsulta ? (
-        <section className="bg-white rounded-2xl shadow-md border-2 border-amber-300 overflow-hidden w-full">
-          <div className="bg-slate-900 text-white px-4 sm:px-5 py-4 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <Lock className="w-5 h-5 text-amber-400 shrink-0" />
-              <h2 className="font-bold text-base sm:text-lg tracking-tight">
-                2. Controles de Registro Bloqueados
-              </h2>
-            </div>
-            <span className="text-xs font-extrabold bg-amber-500/20 text-amber-300 px-3 py-1 rounded-full border border-amber-500/30">
-              Solo Lectura
-            </span>
-          </div>
-
-          <div className="p-5 sm:p-6 bg-amber-50/40 space-y-4">
-            <p className="text-sm sm:text-base font-semibold text-slate-800 leading-relaxed">
-              👀 <strong>Modo Consulta:</strong> Turno activo con el equipo{' '}
-              <strong className="text-amber-800">{resumenEquipoActivo}</strong>. Los controles de
-              registro están bloqueados en este dispositivo para evitar modificaciones accidentales
-              desde otros teléfonos o computadoras en planta.
-            </p>
-            <p className="text-xs sm:text-sm text-slate-600">
-              Puede supervisar en tiempo real todas las entregas parciales y métricas acumuladas en
-              el panel derecho. Si cambió de teléfono o necesita hacer un relevo de emergencia, puede
-              transferir el control a este dispositivo:
-            </p>
-
-            {alReclamarControlDispositivo && (
-              <div className="pt-1">
-                <button
-                  type="button"
-                  disabled={cargandoAccion}
-                  onClick={alReclamarControlDispositivo}
-                  className="w-full sm:w-auto min-h-[46px] px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs sm:text-sm border border-slate-700 shadow-sm transition cursor-pointer"
-                >
-                  Reclamar control en este dispositivo
-                </button>
+      {turnoIniciado &&
+        turnoActual?.estado === 'En Progreso' &&
+        (enModoConsulta ? (
+          <section className="bg-white rounded-2xl shadow-md border-2 border-amber-300 overflow-hidden w-full">
+            <div className="bg-slate-900 text-white px-4 sm:px-5 py-4 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+                <h2 className="font-bold text-base sm:text-lg tracking-tight">
+                  2. Controles de Registro Bloqueados
+                </h2>
               </div>
-            )}
-          </div>
-        </section>
-      ) : (
-        <section className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden w-full">
-          <div className="bg-slate-900 text-white px-4 sm:px-5 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <PackagePlus className="w-5 h-5 text-emerald-400 shrink-0" />
-              <h2 className="font-bold text-base sm:text-lg tracking-tight">
-                2. Registro Parcial de Armaduras Estabilizadas
-              </h2>
+              <span className="text-xs font-extrabold bg-amber-500/20 text-amber-300 px-3 py-1 rounded-full border border-amber-500/30">
+                Solo Lectura
+              </span>
             </div>
-          </div>
 
-          <form onSubmit={manejarEnvioParcial} className="p-4 sm:p-5 space-y-5">
-            {/* Cantidad de Armaduras Estabilizadas + Botones Táctiles Rápidos */}
-            <div>
-              <label
-                htmlFor="campo-cantidad-parcial"
-                className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-600 mb-1.5"
-              >
-                Cantidad de Armaduras Estabilizadas Pasadas *
-              </label>
-              <input
-                id="campo-cantidad-parcial"
-                type="number"
-                inputMode="numeric"
-                min="1"
-                step="1"
-                placeholder="Ingrese cantidad del lote (ej. 45)"
-                value={cantidadParcial}
-                disabled={turnoCerrado}
-                onChange={(e) => setCantidadParcial(e.target.value)}
-                required
-                className="w-full min-h-[52px] rounded-xl border-2 border-slate-300 px-4 py-3 text-xl font-extrabold text-slate-900 placeholder:text-slate-400 placeholder:text-base placeholder:font-normal focus:border-emerald-600 focus:outline-none"
-              />
+            <div className="p-5 sm:p-6 bg-amber-50/40 space-y-4">
+              <p className="text-sm sm:text-base font-semibold text-slate-800 leading-relaxed">
+                👀 <strong>Modo Consulta:</strong> Turno activo con el equipo{' '}
+                <strong className="text-amber-800">{resumenEquipoActivo}</strong>. Los controles de
+                registro están bloqueados en este dispositivo para evitar modificaciones accidentales
+                desde otros teléfonos o computadoras en planta.
+              </p>
+              <p className="text-xs sm:text-sm text-slate-600">
+                Puede supervisar en tiempo real todas las entregas parciales y métricas acumuladas en
+                el panel derecho. Si cambió de teléfono o necesita hacer un relevo de emergencia, puede
+                transferir el control a este dispositivo:
+              </p>
 
-              {/* Botonera táctil para incremento rápido en pantalla industrial */}
-              <div className="mt-3">
-                <span className="text-xs font-bold text-slate-500 block mb-2">
-                  Suma rápida táctil (para uso con guantes):
-                </span>
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                  {[5, 10, 25, 50, 100].map((valor) => (
-                    <button
-                      key={valor}
-                      type="button"
-                      disabled={turnoCerrado}
-                      onClick={() => sumarCantidadRapida(valor)}
-                      className="min-h-[48px] py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 border border-emerald-300 font-extrabold text-base transition cursor-pointer disabled:opacity-40"
-                    >
-                      +{valor}
-                    </button>
-                  ))}
+              {alReclamarControlDispositivo && (
+                <div className="pt-1">
                   <button
                     type="button"
-                    disabled={turnoCerrado || !cantidadParcial}
-                    onClick={() => setCantidadParcial('')}
-                    className="min-h-[48px] py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm inline-flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
+                    disabled={cargandoAccion}
+                    onClick={alReclamarControlDispositivo}
+                    className="w-full sm:w-auto min-h-[46px] px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs sm:text-sm border border-slate-700 shadow-sm transition cursor-pointer"
                   >
-                    <RotateCcw className="w-4 h-4 shrink-0" />
-                    <span>Limpiar</span>
+                    Reclamar control en este dispositivo
                   </button>
                 </div>
+              )}
+            </div>
+          </section>
+        ) : (
+          <section className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden w-full">
+            <div className="bg-slate-900 text-white px-4 sm:px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <PackagePlus className="w-5 h-5 text-emerald-400 shrink-0" />
+                <h2 className="font-bold text-base sm:text-lg tracking-tight">
+                  2. Registro Parcial de Armaduras Estabilizadas
+                </h2>
               </div>
             </div>
 
-            {/* Notas / Observaciones Opcionales */}
-            <div>
-              <label
-                htmlFor="campo-observacion-parcial"
-                className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-600 mb-1.5"
+            <form onSubmit={manejarEnvioParcial} className="p-4 sm:p-5 space-y-5">
+              {/* Cantidad de Armaduras Estabilizadas + Botones Táctiles Rápidos */}
+              <div>
+                <label
+                  htmlFor="campo-cantidad-parcial"
+                  className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-600 mb-1.5"
+                >
+                  Cantidad de Armaduras Estabilizadas Pasadas *
+                </label>
+                <input
+                  id="campo-cantidad-parcial"
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  step="1"
+                  placeholder="Ingrese cantidad del lote (ej. 45)"
+                  value={cantidadParcial}
+                  disabled={turnoCerrado}
+                  onChange={(e) => setCantidadParcial(e.target.value)}
+                  required
+                  className="w-full min-h-[52px] rounded-xl border-2 border-slate-300 px-4 py-3 text-xl font-extrabold text-slate-900 placeholder:text-slate-400 placeholder:text-base placeholder:font-normal focus:border-emerald-600 focus:outline-none"
+                />
+
+                {/* Botonera táctil para incremento rápido en pantalla industrial */}
+                <div className="mt-3">
+                  <span className="text-xs font-bold text-slate-500 block mb-2">
+                    Suma rápida táctil (para uso con guantes):
+                  </span>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {[5, 10, 25, 50, 100].map((valor) => (
+                      <button
+                        key={valor}
+                        type="button"
+                        disabled={turnoCerrado}
+                        onClick={() => sumarCantidadRapida(valor)}
+                        className="min-h-[48px] py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 border border-emerald-300 font-extrabold text-base transition cursor-pointer disabled:opacity-40"
+                      >
+                        +{valor}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={turnoCerrado || !cantidadParcial}
+                      onClick={() => setCantidadParcial('')}
+                      className="min-h-[48px] py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm inline-flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
+                    >
+                      <RotateCcw className="w-4 h-4 shrink-0" />
+                      <span>Limpiar</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notas / Observaciones Opcionales */}
+              <div>
+                <label
+                  htmlFor="campo-observacion-parcial"
+                  className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-600 mb-1.5"
+                >
+                  Notas u Observaciones de la Entrega (Opcional)
+                </label>
+                <textarea
+                  id="campo-observacion-parcial"
+                  rows="2"
+                  placeholder="Ej. Lote estabilizado completo sin contratiempos..."
+                  value={observacionParcial}
+                  disabled={turnoCerrado}
+                  onChange={(e) => setObservacionParcial(e.target.value)}
+                  className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-base font-medium text-slate-800 placeholder:text-slate-400 focus:border-emerald-600 focus:outline-none"
+                />
+
+                {/* Etiquetas rápidas de observación */}
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {notasRapidas.map((nota) => (
+                    <button
+                      key={nota}
+                      type="button"
+                      disabled={turnoCerrado}
+                      onClick={() => setObservacionParcial(nota)}
+                      className="min-h-[40px] text-xs sm:text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl font-semibold transition cursor-pointer inline-flex items-center gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span>{nota}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Botón de Registro de Entrega Parcial (registra hora automáticamente al enviar) */}
+              <button
+                type="submit"
+                disabled={turnoCerrado || cargandoAccion}
+                className="w-full min-h-[54px] py-4 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-extrabold text-base sm:text-lg shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
               >
-                Notas u Observaciones de la Entrega (Opcional)
-              </label>
-              <textarea
-                id="campo-observacion-parcial"
-                rows="2"
-                placeholder="Ej. Lote estabilizado completo sin contratiempos..."
-                value={observacionParcial}
-                disabled={turnoCerrado}
-                onChange={(e) => setObservacionParcial(e.target.value)}
-                className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-base font-medium text-slate-800 placeholder:text-slate-400 focus:border-emerald-600 focus:outline-none"
-              />
-
-              {/* Etiquetas rápidas de observación */}
-              <div className="mt-2.5 flex flex-wrap gap-2">
-                {notasRapidas.map((nota) => (
-                  <button
-                    key={nota}
-                    type="button"
-                    disabled={turnoCerrado}
-                    onClick={() => setObservacionParcial(nota)}
-                    className="min-h-[40px] text-xs sm:text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl font-semibold transition cursor-pointer inline-flex items-center gap-1.5"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span>{nota}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Botón de Registro de Entrega Parcial (registra hora automáticamente al enviar) */}
-            <button
-              type="submit"
-              disabled={turnoCerrado || cargandoAccion}
-              className="w-full min-h-[54px] py-4 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-extrabold text-base sm:text-lg shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
-            >
-              <PlusCircle className="w-6 h-6 shrink-0" />
-              <span>Registrar Armaduras</span>
-            </button>
-          </form>
-        </section>
-      )}
+                <PlusCircle className="w-6 h-6 shrink-0" />
+                <span>Registrar Armaduras</span>
+              </button>
+            </form>
+          </section>
+        ))}
     </div>
   );
 };

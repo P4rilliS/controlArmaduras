@@ -328,9 +328,9 @@ const TablaParciales = ({
 
       {/* =====================================================================
           SECCIÓN 3: CIERRE DE TURNO ("TERMINAR TURNO") Y CONTADOR DE MÁQUINA
-          (OCULTO EN MODO CONSULTA PARA EVITAR CIERRE DESDE OTROS DISPOSITIVOS)
+          (SOLO SE RENDERIZA CUANDO EXISTE UN TURNO INICIADO Y NO ESTÁ EN MODO CONSULTA)
          ===================================================================== */}
-      {!enModoConsulta && (
+      {turnoIniciado && !enModoConsulta && (
         <section className="bg-white rounded-2xl shadow-lg border-2 border-amber-500 overflow-hidden w-full">
           <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white px-4 sm:px-5 py-4 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
