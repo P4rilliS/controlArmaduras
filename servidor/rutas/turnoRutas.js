@@ -11,7 +11,8 @@ const {
   reclamarControlTurno,
   guardarYCerrarTurnoDirecto,
   autenticarSupervisor,
-  obtenerEstadisticasEHistorial
+  obtenerEstadisticasEHistorial,
+  actualizarControlSinAnillar
 } = require('../controladores/turnoControlador');
 
 const { verificarSupervisor } = require('../middlewares/autenticacionSupervisor');
@@ -53,5 +54,12 @@ enrutador.post('/supervisor/autenticar', autenticarSupervisor);
 
 // Obtener métricas clave, liquidación confidencial e historial filtrable (requiere clave de supervisor)
 enrutador.get('/supervisor/estadisticas', verificarSupervisor, obtenerEstadisticasEHistorial);
+
+// Guardar o actualizar el Control Flexible de Armaduras Sin Anillar (requiere clave de supervisor)
+enrutador.put(
+  '/supervisor/:id/control-sin-anillar',
+  verificarSupervisor,
+  actualizarControlSinAnillar
+);
 
 module.exports = enrutador;

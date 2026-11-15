@@ -138,16 +138,12 @@ const Aplicacion = () => {
       setConexionServidor(true);
       setTokenLocalDispositivo(obtenerTokenLocalDispositivo());
 
-      if (respuesta.turno) {
+      if (respuesta.turno && respuesta.turno.estado === 'En Progreso') {
         setTurnoActual(respuesta.turno);
         localStorage.setItem(CLAVE_STORAGE_ACTIVO, JSON.stringify(respuesta.turno));
       } else {
-        setTurnoActual((previo) => {
-          // Si ya estaba en estado Cerrado en pantalla, mantener el resumen hasta que limpien vista
-          if (previo && previo.estado === 'Cerrado') return previo;
-          localStorage.removeItem(CLAVE_STORAGE_ACTIVO);
-          return null;
-        });
+        setTurnoActual(null);
+        localStorage.removeItem(CLAVE_STORAGE_ACTIVO);
       }
     } catch {
       setConexionServidor(false);
@@ -453,7 +449,7 @@ const Aplicacion = () => {
       if (!String(turnoActual._id).startsWith('local-')) {
         const respuesta = await finalizarTurnoActivo(turnoActual._id, contadorMaquina);
         const turnoCerrado = respuesta.turno;
-        setTurnoActual(turnoCerrado);
+        setTurnoActual(null);
 
         localStorage.removeItem(CLAVE_TOKEN_TURNO_ACTIVO);
         setTokenLocalDispositivo('');
@@ -466,7 +462,7 @@ const Aplicacion = () => {
         guardarRespaldoLocal(null, nuevoHistorial);
         setConexionServidor(true);
         mostrarMensaje(
-          'Turno cerrado exitosamente. Consolidado guardado en MongoDB.'
+          'Turno cerrado exitosamente. Consolidado guardado en MongoDB. Listo para abrir el siguiente turno.'
         );
         return true;
       } else {
@@ -477,6 +473,7 @@ const Aplicacion = () => {
             fechaApertura: turnoActual.fechaApertura,
             horaApertura: turnoActual.horaApertura,
             tipoTurno: turnoActual.tipoTurno,
+            esProduccionInterna: turnoActual.esProduccionInterna,
             puestoMaquina: turnoActual.puestoMaquina,
             puestoAnillador: turnoActual.puestoAnillador,
             puestoEstabilizador: turnoActual.puestoEstabilizador,
@@ -486,7 +483,7 @@ const Aplicacion = () => {
             contadorMaquina: Number(contadorMaquina)
           });
           const turnoCerradoRemoto = respuesta.turno;
-          setTurnoActual(turnoCerradoRemoto);
+          setTurnoActual(null);
 
           localStorage.removeItem(CLAVE_TOKEN_TURNO_ACTIVO);
           setTokenLocalDispositivo('');
@@ -501,7 +498,7 @@ const Aplicacion = () => {
           guardarRespaldoLocal(null, nuevoHistorial);
           setConexionServidor(true);
           mostrarMensaje(
-            'Turno sincronizado y cerrado exitosamente en MongoDB.'
+            'Turno sincronizado y cerrado exitosamente en MongoDB. Listo para abrir el siguiente turno.'
           );
           return true;
         } catch {
@@ -530,7 +527,7 @@ const Aplicacion = () => {
             estado: 'Cerrado',
             updatedAt: ahoraCierreISO
           };
-          setTurnoActual(turnoCerradoLocal);
+          setTurnoActual(null);
           localStorage.removeItem(CLAVE_TOKEN_TURNO_ACTIVO);
           setTokenLocalDispositivo('');
 
@@ -709,16 +706,31 @@ const Aplicacion = () => {
         </div>
       )}
 
-      {/* Contenido Principal Responsivo */}
+      {/* Contenido Principal Responsivo con Renderizado Condicional Mutuamente Excluyente */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
         {modoSupervisor ? (
           <PanelSupervisor
             claveSupervisor={claveSupervisorActiva}
             turnosRespaldoLocal={listaRespaldoParaSupervisor}
           />
+        ) : !turnoEnProgreso ? (
+          /* ESTADO 1: SIN TURNO ACTIVO (!turnoActual || turnoActual.estado !== 'En Progreso')
+             Muestra ÚNICAMENTE "1. Apertura de Turno y Personal" centrado con max-w-xl mx-auto */
+          <div className="w-full max-w-xl mx-auto py-2 sm:py-4">
+            <FormularioRegistro
+              turnoActual={null}
+              esDispositivoAutorizado={esDispositivoAutorizado}
+              alReclamarControlDispositivo={manejarReclamarControlDispositivo}
+              alIniciarOActualizarTurno={manejarIniciarOActualizarTurno}
+              alAgregarParcial={manejarAgregarParcial}
+              cargandoAccion={cargandoAccion}
+            />
+          </div>
         ) : (
+          /* ESTADO 2: CON TURNO ABIERTO EN CURSO (turnoActual && turnoActual.estado === 'En Progreso')
+             Oculta la tarjeta 1 y muestra cintillo compacto + Sección 2 + Entregas Parciales + Sección 3 */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
-            {/* Columna Izquierda: Gestión de Turno y Registro Parcial */}
+            {/* Columna Izquierda: Cintillo Compacto del Turno Activo y Sección 2 (Registro Parcial) */}
             <div className="lg:col-span-5 w-full">
               <FormularioRegistro
                 turnoActual={turnoActual}
@@ -730,7 +742,7 @@ const Aplicacion = () => {
               />
             </div>
 
-            {/* Columna Derecha: Tabla/Tarjetas en Tiempo Real y Cierre de Turno */}
+            {/* Columna Derecha: Entregas Parciales en Tiempo Real y Sección 3 (Cierre de Turno) */}
             <div className="lg:col-span-7 w-full">
               <TablaParciales
                 turnoActual={turnoActual}

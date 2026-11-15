@@ -49,6 +49,12 @@ const obtenerDescripcionEquipoTurno = (turno) => {
     turno.operadores.filter(Boolean).forEach((op) => presentes.push(op));
   }
 
+  if (turno.esProduccionInterna) {
+    return presentes.length > 0
+      ? `${presentes.join(', ')} · Producción Interna / Sin Nómina`
+      : 'Producción Interna / Supervisor (Sin Nómina)';
+  }
+
   return presentes.length > 0 ? presentes.join(', ') : 'Equipo de planta';
 };
 
@@ -168,11 +174,13 @@ const normalizarYValidarPersonal = (entradaPrincipal, operadoresLegados) => {
     .filter((item) => item.datos.asistio && item.datos.trabajador)
     .map((item) => item.datos.trabajador);
 
-  if (presentes.length === 0) {
+  const esProduccionInterna = Boolean(payload.esProduccionInterna);
+
+  if (presentes.length === 0 && !esProduccionInterna) {
     return {
       valido: false,
       mensaje:
-        'Debe seleccionar al menos un trabajador presente en alguno de los 3 puestos (Máquina, Anillador o Estabilizador) para abrir el turno.'
+        'Debe seleccionar al menos un trabajador presente en alguno de los 3 puestos (Máquina, Anillador o Estabilizador) o marcar "Producción Interna / Sin Nómina (Supervisor)" para abrir el turno.'
     };
   }
 
@@ -195,6 +203,7 @@ const normalizarYValidarPersonal = (entradaPrincipal, operadoresLegados) => {
 
   return {
     valido: true,
+    esProduccionInterna,
     puestoMaquina,
     puestoAnillador,
     puestoEstabilizador,
@@ -328,6 +337,7 @@ const iniciarTurno = async (req, res) => {
       puestoEstabilizador,
       encargado,
       operadores,
+      esProduccionInterna,
       tokenDispositivo
     } = req.body;
 
@@ -356,7 +366,8 @@ const iniciarTurno = async (req, res) => {
       puestoAnillador,
       puestoEstabilizador,
       encargado,
-      operadores
+      operadores,
+      esProduccionInterna
     });
     if (!validacionPersonal.valido) {
       return res.status(400).json({
@@ -380,6 +391,7 @@ const iniciarTurno = async (req, res) => {
       fechaCierre: null,
       horaCierre: '',
       tipoTurno,
+      esProduccionInterna: validacionPersonal.esProduccionInterna,
       puestoMaquina: validacionPersonal.puestoMaquina,
       puestoAnillador: validacionPersonal.puestoAnillador,
       puestoEstabilizador: validacionPersonal.puestoEstabilizador,
@@ -426,7 +438,8 @@ const actualizarDatosTurno = async (req, res) => {
       puestoAnillador,
       puestoEstabilizador,
       encargado,
-      operadores
+      operadores,
+      esProduccionInterna
     } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -475,7 +488,9 @@ const actualizarDatosTurno = async (req, res) => {
       puestoEstabilizador:
         puestoEstabilizador !== undefined ? puestoEstabilizador : turno.puestoEstabilizador,
       encargado: encargado !== undefined ? encargado : turno.encargado,
-      operadores: operadores !== undefined ? operadores : turno.operadores
+      operadores: operadores !== undefined ? operadores : turno.operadores,
+      esProduccionInterna:
+        esProduccionInterna !== undefined ? esProduccionInterna : turno.esProduccionInterna
     });
     if (!validacionPersonal.valido) {
       return res.status(400).json({
@@ -484,6 +499,7 @@ const actualizarDatosTurno = async (req, res) => {
       });
     }
 
+    turno.esProduccionInterna = validacionPersonal.esProduccionInterna;
     turno.puestoMaquina = validacionPersonal.puestoMaquina;
     turno.puestoAnillador = validacionPersonal.puestoAnillador;
     turno.puestoEstabilizador = validacionPersonal.puestoEstabilizador;
@@ -814,6 +830,7 @@ const guardarYCerrarTurnoDirecto = async (req, res) => {
       puestoEstabilizador,
       encargado,
       operadores,
+      esProduccionInterna,
       registrosParciales,
       contadorMaquina
     } = req.body;
@@ -823,7 +840,8 @@ const guardarYCerrarTurnoDirecto = async (req, res) => {
       puestoAnillador,
       puestoEstabilizador,
       encargado,
-      operadores
+      operadores,
+      esProduccionInterna
     });
     if (!validacionPersonal.valido) {
       return res.status(400).json({
@@ -865,6 +883,7 @@ const guardarYCerrarTurnoDirecto = async (req, res) => {
     );
 
     const liquidacionCalculada = calcularLiquidacionTurno({
+      esProduccionInterna: validacionPersonal.esProduccionInterna,
       puestoMaquina: validacionPersonal.puestoMaquina,
       puestoAnillador: validacionPersonal.puestoAnillador,
       puestoEstabilizador: validacionPersonal.puestoEstabilizador,
@@ -884,6 +903,7 @@ const guardarYCerrarTurnoDirecto = async (req, res) => {
       fechaCierre: ahora,
       horaCierre: horaPorDefecto,
       tipoTurno,
+      esProduccionInterna: validacionPersonal.esProduccionInterna,
       puestoMaquina: validacionPersonal.puestoMaquina,
       puestoAnillador: validacionPersonal.puestoAnillador,
       puestoEstabilizador: validacionPersonal.puestoEstabilizador,
@@ -1134,6 +1154,75 @@ const obtenerEstadisticasEHistorial = async (req, res) => {
   }
 };
 
+/**
+ * Registra o actualiza con flexibilidad total el "Control de Armaduras Sin Anillar"
+ * para un turno específico (sin bloqueos en cascada):
+ * - recibidasSinAnillar: 100% editable por el supervisor (sugiere el saldo anterior pero permite sobrescribir).
+ * - producidasMaquina: 100% editable por el supervisor (sugiere el contadorMaquina del turno pero permite cualquier valor manual).
+ * - dejadasSinAnillar: 100% editable.
+ * - anilladasReales: calculado en vivo como (recibidasSinAnillar + producidasMaquina) - dejadasSinAnillar.
+ * PUT /api/turnos/supervisor/:id/control-sin-anillar
+ */
+const actualizarControlSinAnillar = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      recibidasSinAnillar,
+      producidasMaquina,
+      dejadasSinAnillar,
+      observacion
+    } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        exito: false,
+        mensaje: 'El identificador del turno no es válido.'
+      });
+    }
+
+    const turno = await Turno.findById(id);
+    if (!turno) {
+      return res.status(404).json({
+        exito: false,
+        mensaje: 'No se encontró el turno especificado para registrar el control sin anillar.'
+      });
+    }
+
+    const recibidasNum = Math.max(0, Math.round(Number(recibidasSinAnillar) || 0));
+    const producidasNum = Math.max(0, Math.round(Number(producidasMaquina) || 0));
+    const dejadasNum = Math.max(0, Math.round(Number(dejadasSinAnillar) || 0));
+    const anilladasReales = recibidasNum + producidasNum - dejadasNum;
+
+    turno.controlSinAnillar = {
+      recibidasSinAnillar: recibidasNum,
+      producidasMaquina: producidasNum,
+      dejadasSinAnillar: dejadasNum,
+      anilladasReales,
+      observacion: observacion ? String(observacion).trim() : '',
+      registrado: true,
+      actualizadoEn: new Date()
+    };
+
+    await turno.save();
+
+    const turnoRespuesta = asegurarPuestosEnObjetoTurno(
+      turno.toObject ? turno.toObject() : { ...turno }
+    );
+
+    return res.status(200).json({
+      exito: true,
+      mensaje: 'Control de armaduras sin anillar guardado correctamente.',
+      turno: turnoRespuesta
+    });
+  } catch (error) {
+    console.error('[Controlador Turno] Error al guardar control sin anillar:', error);
+    return res.status(400).json({
+      exito: false,
+      mensaje: error.message || 'No se pudo guardar el control de armaduras sin anillar.'
+    });
+  }
+};
+
 module.exports = {
   obtenerTurnoActivo,
   iniciarTurno,
@@ -1145,5 +1234,6 @@ module.exports = {
   reclamarControlTurno,
   guardarYCerrarTurnoDirecto,
   autenticarSupervisor,
-  obtenerEstadisticasEHistorial
+  obtenerEstadisticasEHistorial,
+  actualizarControlSinAnillar
 };

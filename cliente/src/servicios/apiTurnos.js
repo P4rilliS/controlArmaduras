@@ -186,3 +186,23 @@ export const obtenerDatosSupervisor = async (claveSupervisor = '', filtros = {})
   });
   return procesarRespuesta(respuesta);
 };
+
+/**
+ * Guarda o actualiza el Control de Armaduras Sin Anillar (100% flexible y sin bloqueos en cascada)
+ * para un turno específico desde el Panel del Supervisor.
+ */
+export const guardarControlSinAnillar = async (
+  idTurno,
+  datosControl,
+  claveSupervisor = ''
+) => {
+  const respuesta = await fetch(`${URL_BASE_API}/supervisor/${idTurno}/control-sin-anillar`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(claveSupervisor ? { 'x-clave-supervisor': claveSupervisor } : {})
+    },
+    body: JSON.stringify(datosControl)
+  });
+  return procesarRespuesta(respuesta);
+};

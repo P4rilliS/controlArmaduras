@@ -39,9 +39,16 @@ const TablaParciales = ({
 
   const registrosParciales = turnoActual?.registrosParciales || [];
   const turnoCerrado = turnoActual?.estado === 'Cerrado';
-  const turnoIniciado = Boolean(turnoActual && turnoActual._id);
-  const enModoConsulta = turnoIniciado && !turnoCerrado && !esDispositivoAutorizado;
+  const turnoIniciado = Boolean(
+    turnoActual && turnoActual._id && turnoActual.estado === 'En Progreso'
+  );
+  const enModoConsulta = turnoIniciado && !esDispositivoAutorizado;
   const puedeEditar = !turnoCerrado && esDispositivoAutorizado;
+
+  // Renderizado condicional estricto: si no hay turno abierto en curso, ocultar por completo
+  if (!turnoIniciado) {
+    return null;
+  }
 
   // Sumatoria en tiempo real de las armaduras estabilizadas registradas
   const totalEstabilizadas = registrosParciales.reduce(

@@ -123,6 +123,12 @@ export const obtenerResumenEquipoTurno = (turno) => {
     presentes.push(`${puestoEstabilizador.trabajador} (Estabilizador)`);
   }
 
+  if (turno.esProduccionInterna) {
+    return presentes.length > 0
+      ? `${presentes.join(' · ')} (Producción Interna / Sin Nómina)`
+      : 'Producción Interna / Supervisor (Sin Nómina)';
+  }
+
   return presentes.length > 0 ? presentes.join(' · ') : 'Sin personal presente';
 };
 
@@ -149,7 +155,7 @@ export const formatearMonedaUSD = (monto) => {
  * - Puesto Estabilizador presente: devenga (totalEstabilizadas * 0.30).
  */
 export const calcularLiquidacionTurnoCliente = (turno, contadorMaquinaOverride = null) => {
-  if (!turno) {
+  if (!turno || turno.esProduccionInterna === true) {
     return {
       tarifaMaquina: TARIFA_MAQUINA_USD,
       tarifaEstabilizada: TARIFA_ESTABILIZADA_USD,
@@ -192,7 +198,7 @@ export const calcularLiquidacionTurnoCliente = (turno, contadorMaquinaOverride =
   // 1. Puesto Máquina (Encargado)
   if (maquinaPresente) {
     const trabajaCompletamenteSolo = !anilladorPresente && !estabilizadorPresente;
-    if (trabajaCompletamenteSolo) {
+    if (trabajaCompletamenteSolo && cantidadEstabilizadas > 0) {
       const montoSolo = Number((pagoMaquinaBase + pagoEstabilizadoBase).toFixed(2));
       pagosPersonal.push({
         nombre: puestoMaquina.trabajador,
@@ -398,11 +404,13 @@ export const exportarTurnosAExcelCSV = (turnos = [], etiquetaFiltro = 'resumen_d
       ? formatearMonedaUSD(liquidacion.totalNominaTurno)
       : 'En curso';
     const desglosePagos = estaCerrado
-      ? liquidacion.pagosPersonal
-          .map(
-            (p) => `${p.nombre} (${p.rol} - ${p.concepto}): ${formatearMonedaUSD(p.montoPagar)}`
-          )
-          .join(' | ')
+      ? turno.esProduccionInterna
+        ? 'Producción Interna / Supervisor (Sin Nómina: $0.00)'
+        : liquidacion.pagosPersonal
+            .map(
+              (p) => `${p.nombre} (${p.rol} - ${p.concepto}): ${formatearMonedaUSD(p.montoPagar)}`
+            )
+            .join(' | ')
       : 'Pendiente de cierre';
 
     return [

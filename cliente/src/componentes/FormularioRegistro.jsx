@@ -69,14 +69,15 @@ const FormularioRegistro = ({
   cargandoAccion
 }) => {
   const turnoCerrado = turnoActual?.estado === 'Cerrado';
-  const turnoIniciado = Boolean(turnoActual && turnoActual._id);
-  const enModoConsulta = turnoIniciado && !turnoCerrado && !esDispositivoAutorizado;
+  const turnoIniciado = Boolean(turnoActual && turnoActual._id && turnoActual.estado === 'En Progreso');
+  const enModoConsulta = turnoIniciado && !esDispositivoAutorizado;
 
   // Estados para el tipo de turno y los 3 puestos esenciales de la línea operativa
   const [tipoTurno, setTipoTurno] = useState('Primer Turno');
   const [trabajadorMaquina, setTrabajadorMaquina] = useState('');
   const [trabajadorAnillador, setTrabajadorAnillador] = useState('');
   const [trabajadorEstabilizador, setTrabajadorEstabilizador] = useState('');
+  const [esProduccionInterna, setEsProduccionInterna] = useState(false);
 
   // Estado para el formulario de entrega parcial de armaduras estabilizadas
   const [cantidadParcial, setCantidadParcial] = useState('');
@@ -100,11 +101,13 @@ const FormularioRegistro = ({
           ? puestoEstabilizador.trabajador
           : ''
       );
+      setEsProduccionInterna(Boolean(turno.esProduccionInterna));
     } else {
       setTipoTurno('Primer Turno');
       setTrabajadorMaquina('');
       setTrabajadorAnillador('');
       setTrabajadorEstabilizador('');
+      setEsProduccionInterna(false);
     }
   }, []);
 
@@ -121,7 +124,7 @@ const FormularioRegistro = ({
     turnoActual
   ]);
 
-  // Verifica si al menos un puesto tiene un trabajador seleccionado
+  // Verifica si al menos un puesto tiene un trabajador seleccionado o si es producción interna
   const trabajadoresPresentesLista = [
     trabajadorMaquina,
     trabajadorAnillador,
@@ -131,6 +134,7 @@ const FormularioRegistro = ({
     .filter(Boolean);
 
   const hayAlMenosUnPresente = trabajadoresPresentesLista.length > 0;
+  const puedeIniciarTurno = hayAlMenosUnPresente || esProduccionInterna;
 
   // Construye el payload estructurado de los 3 puestos manteniendo compatibilidad hacia atrás
   const construirPayloadTurno = () => {
@@ -140,6 +144,7 @@ const FormularioRegistro = ({
 
     return {
       tipoTurno,
+      esProduccionInterna: Boolean(esProduccionInterna),
       puestoMaquina: {
         trabajador: maqLimpio,
         asistio: Boolean(maqLimpio),
@@ -167,9 +172,9 @@ const FormularioRegistro = ({
       return false;
     }
 
-    if (trabajadoresPresentesLista.length === 0) {
+    if (trabajadoresPresentesLista.length === 0 && !esProduccionInterna) {
       setErrorFormulario(
-        'Debe haber al menos un trabajador presente seleccionado en alguno de los 3 puestos para iniciar el turno.'
+        'Debe seleccionar al menos un trabajador presente en alguno de los 3 puestos, o activar la opción "Producción Interna / Sin Nómina (Supervisor)".'
       );
       return false;
     }
@@ -293,182 +298,23 @@ const FormularioRegistro = ({
       )}
 
       {/* =====================================================================
-          SECCIÓN 1: CABECERA DEL TURNO ACTIVO (BLOQUEA APERTURA SI YA HAY UNO)
-          O FORMULARIO DE APERTURA (SOLO SI NO HAY TURNO ACTIVO EN PLANTA)
+          RENDERIZADO CONDICIONAL MUTUAMENTE EXCLUYENTE SEGÚN ESTADO DEL TURNO:
+          - SIN TURNO ACTIVO (!turnoIniciado): Muestra ÚNICAMENTE "1. Apertura de Turno y Personal" centrado (max-w-xl mx-auto).
+          - CON TURNO EN CURSO (turnoIniciado): Oculta por completo la tarjeta 1 y muestra un cintillo compacto
+            del turno activo seguido de "2. Registro Parcial de Armaduras Estabilizadas".
          ===================================================================== */}
-      <section className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden w-full">
-        <div className="bg-slate-900 text-white px-4 sm:px-5 py-4 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <Users className="w-5 h-5 text-amber-400 shrink-0" />
-            <h2 className="font-bold text-base sm:text-lg tracking-tight">
-              {turnoIniciado
-                ? '1. Turno Activo en Planta'
-                : '1. Apertura de Turno y Puestos de Línea'}
-            </h2>
+      {!turnoIniciado ? (
+        <section className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden w-full max-w-xl mx-auto">
+          <div className="bg-slate-900 text-white px-4 sm:px-5 py-4 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <Users className="w-5 h-5 text-amber-400 shrink-0" />
+              <h2 className="font-bold text-base sm:text-lg tracking-tight">
+                1. Apertura de Turno y Personal
+              </h2>
+            </div>
           </div>
 
-          {turnoIniciado && !turnoCerrado && (
-            <span className="inline-flex items-center gap-1.5 text-xs font-extrabold bg-emerald-500/20 text-emerald-300 px-3 py-1.5 rounded-full border border-emerald-500/30">
-              <Clock className="w-3.5 h-3.5 animate-pulse" />
-              En Progreso
-            </span>
-          )}
-
-          {turnoCerrado && (
-            <span className="inline-flex items-center gap-1 text-xs font-bold bg-rose-500/20 text-rose-300 px-3 py-1.5 rounded-full border border-rose-500/30">
-              <Lock className="w-3.5 h-3.5" /> Turno Cerrado
-            </span>
-          )}
-        </div>
-
-        {/* Si ya hay un turno activo en planta, se bloquea el formulario de apertura
-            y se muestra directamente la información de los 3 puestos y la Hora de Inicio */}
-        {turnoIniciado ? (
-          <div className="p-4 sm:p-5 bg-slate-50/70 space-y-4">
-            {/* Banner de Hora de Inicio y Fecha del Turno Activo */}
-            <div className="bg-slate-900 text-white p-4 rounded-xl border-l-4 border-emerald-400 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 block">
-                  Hora de Inicio del Turno
-                </span>
-                <p className="text-xl sm:text-2xl font-black text-white mt-0.5 flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <span>{turnoActual.horaApertura || 'Registrada'}</span>
-                </p>
-              </div>
-              <div className="text-left sm:text-right">
-                <span className="text-xs font-bold text-amber-300 block">
-                  {turnoActual.tipoTurno}
-                </span>
-                <span className="text-xs text-slate-300">
-                  Fecha: {formatearFechaLegible(turnoActual.fecha)} · Duración:{' '}
-                  <strong>{calcularDuracionTurno(turnoActual)}</strong>
-                </span>
-              </div>
-            </div>
-
-            {/* Estado de Asistencia de los 3 Puestos Esenciales */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {/* Puesto 1: Máquina (Encargado) */}
-              <div
-                className={`p-3 rounded-xl border ${
-                  puestosTurnoActual.puestoMaquina.asistio &&
-                  puestosTurnoActual.puestoMaquina.trabajador
-                    ? 'bg-amber-50/80 border-amber-200'
-                    : 'bg-slate-100 border-slate-200'
-                }`}
-              >
-                <span className="text-[11px] font-extrabold uppercase text-slate-500 block">
-                  1. Máquina
-                </span>
-                {puestosTurnoActual.puestoMaquina.asistio &&
-                puestosTurnoActual.puestoMaquina.trabajador ? (
-                  <p className="text-sm sm:text-base font-black text-slate-900 mt-1 flex items-center gap-1.5">
-                    <UserCheck className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>{puestosTurnoActual.puestoMaquina.trabajador}</span>
-                  </p>
-                ) : (
-                  <p className="text-xs font-bold text-rose-700 mt-1 flex items-center gap-1">
-                    <UserX className="w-3.5 h-3.5 shrink-0" />
-                    <span>Falta / No asistió</span>
-                  </p>
-                )}
-              </div>
-
-              {/* Puesto 2: Anillador */}
-              <div
-                className={`p-3 rounded-xl border ${
-                  puestosTurnoActual.puestoAnillador.asistio &&
-                  puestosTurnoActual.puestoAnillador.trabajador
-                    ? 'bg-sky-50/80 border-sky-200'
-                    : 'bg-slate-100 border-slate-200'
-                }`}
-              >
-                <span className="text-[11px] font-extrabold uppercase text-slate-500 block">
-                  2. Anillador
-                </span>
-                {puestosTurnoActual.puestoAnillador.asistio &&
-                puestosTurnoActual.puestoAnillador.trabajador ? (
-                  <p className="text-sm sm:text-base font-black text-slate-900 mt-1 flex items-center gap-1.5">
-                    <UserCheck className="w-4 h-4 text-sky-600 shrink-0" />
-                    <span>{puestosTurnoActual.puestoAnillador.trabajador}</span>
-                  </p>
-                ) : (
-                  <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1">
-                    <UserX className="w-3.5 h-3.5 shrink-0" />
-                    <span>Falta / Sin asignar</span>
-                  </p>
-                )}
-              </div>
-
-              {/* Puesto 3: Estabilizador */}
-              <div
-                className={`p-3 rounded-xl border ${
-                  puestosTurnoActual.puestoEstabilizador.asistio &&
-                  puestosTurnoActual.puestoEstabilizador.trabajador
-                    ? 'bg-emerald-50/80 border-emerald-200'
-                    : 'bg-slate-100 border-slate-200'
-                }`}
-              >
-                <span className="text-[11px] font-extrabold uppercase text-slate-500 block">
-                  3. Estabilizador
-                </span>
-                {puestosTurnoActual.puestoEstabilizador.asistio &&
-                puestosTurnoActual.puestoEstabilizador.trabajador ? (
-                  <p className="text-sm sm:text-base font-black text-slate-900 mt-1 flex items-center gap-1.5">
-                    <UserCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>{puestosTurnoActual.puestoEstabilizador.trabajador}</span>
-                  </p>
-                ) : (
-                  <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1">
-                    <UserX className="w-3.5 h-3.5 shrink-0" />
-                    <span>Falta / Sin asignar</span>
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {!turnoCerrado && (
-              <div
-                className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs font-semibold px-3.5 py-3 rounded-xl border ${
-                  esDispositivoAutorizado
-                    ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
-                    : 'bg-amber-50 text-amber-950 border-amber-300'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  {esDispositivoAutorizado ? (
-                    <>
-                      <Smartphone className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>
-                        Dispositivo autorizado con control activo de este turno.
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="w-4 h-4 text-amber-700 shrink-0" />
-                      <span>
-                        Modo Consulta (Solo Lectura): Este dispositivo no tiene permisos de edición.
-                      </span>
-                    </>
-                  )}
-                </div>
-
-                {!esDispositivoAutorizado && alReclamarControlDispositivo && (
-                  <button
-                    type="button"
-                    disabled={cargandoAccion}
-                    onClick={alReclamarControlDispositivo}
-                    className="min-h-[38px] px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-300 font-bold text-xs transition cursor-pointer shrink-0"
-                  >
-                    Reclamar control en este dispositivo
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        ) : (
-          /* Formulario de Apertura de Turno con los 3 Puestos Esenciales */
+          {/* Formulario de Apertura de Turno con los 3 Puestos Esenciales */}
           <form onSubmit={manejarGuardarTurno} className="p-4 sm:p-5 space-y-5">
             {/* Selector Obligatorio de Turno */}
             <div>
@@ -582,180 +428,323 @@ const FormularioRegistro = ({
               </div>
             </div>
 
+            {/* Opción de Producción Interna / Sin Nómina (Supervisor) */}
+            <label
+              htmlFor="check-produccion-interna"
+              className={`flex items-start gap-3 p-3.5 rounded-xl border-2 transition cursor-pointer select-none ${
+                esProduccionInterna
+                  ? 'bg-purple-50/90 border-purple-400 text-purple-950'
+                  : 'bg-slate-50/80 border-slate-200 text-slate-700 hover:bg-slate-100/80'
+              }`}
+            >
+              <input
+                id="check-produccion-interna"
+                type="checkbox"
+                checked={esProduccionInterna}
+                onChange={(e) => setEsProduccionInterna(e.target.checked)}
+                className="mt-0.5 w-5 h-5 rounded accent-purple-600 cursor-pointer shrink-0"
+              />
+              <div className="text-xs sm:text-sm">
+                <span className="font-extrabold block text-slate-900">
+                  Producción Interna / Sin Nómina (Supervisor)
+                </span>
+                <span className="text-xs text-slate-600 font-medium block mt-0.5">
+                  Permite abrir el turno aunque los 3 puestos estén sin asignar. Registra la producción de máquina y estabilizado para estadísticas e inventario, pero genera <strong>$0.00</strong> en nómina.
+                </span>
+              </div>
+            </label>
+
             <p className="text-xs text-slate-500 font-medium">
-              * Seleccione al menos un trabajador presente (1, 2 o los 3 puestos). Quien abra el turno registrará el control activo en este dispositivo.
+              * Seleccione al menos un trabajador presente (1, 2 o los 3 puestos) o active &quot;Producción Interna / Sin Nómina&quot;. Quien abra el turno registrará el control activo en este dispositivo.
             </p>
 
             <button
               type="submit"
-              disabled={cargandoAccion || !hayAlMenosUnPresente}
+              disabled={cargandoAccion || !puedeIniciarTurno}
               className="w-full min-h-[52px] inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-base shadow-md transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <UserCheck className="w-5 h-5 text-amber-400 shrink-0" />
               <span>Iniciar Turno de Producción</span>
             </button>
           </form>
-        )}
-      </section>
-
-      {/* =====================================================================
-          SECCIÓN 2: REGISTRO PARCIAL / CONTINUO DE ARMADURAS ESTABILIZADAS
-          (SOLO SE RENDERIZA CUANDO EXISTE UN TURNO ACTIVO EN PROGRESO)
-         ===================================================================== */}
-      {turnoIniciado &&
-        turnoActual?.estado === 'En Progreso' &&
-        (enModoConsulta ? (
-          <section className="bg-white rounded-2xl shadow-md border-2 border-amber-300 overflow-hidden w-full">
-            <div className="bg-slate-900 text-white px-4 sm:px-5 py-4 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <Lock className="w-5 h-5 text-amber-400 shrink-0" />
-                <h2 className="font-bold text-base sm:text-lg tracking-tight">
-                  2. Controles de Registro Bloqueados
-                </h2>
+        </section>
+      ) : (
+        <>
+          {/* CINTILLO COMPACTO DEL TURNO EN CURSO (Reemplaza la tarjeta de apertura mientras el turno está abierto) */}
+          <section className="bg-slate-900 text-white rounded-2xl shadow-md border border-slate-800 p-3.5 sm:p-4 space-y-3 w-full">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 text-xs font-extrabold bg-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded-full border border-emerald-500/30">
+                  <Clock className="w-3.5 h-3.5 animate-pulse shrink-0" />
+                  Turno en Curso
+                </span>
+                <span className="text-xs sm:text-sm font-black text-amber-400">
+                  {turnoActual.tipoTurno}
+                </span>
+                {turnoActual.esProduccionInterna && (
+                  <span className="text-[11px] font-extrabold bg-purple-500/25 text-purple-200 border border-purple-400/40 px-2 py-0.5 rounded-full">
+                    Producción Interna / Sin Nómina ($0.00)
+                  </span>
+                )}
               </div>
-              <span className="text-xs font-extrabold bg-amber-500/20 text-amber-300 px-3 py-1 rounded-full border border-amber-500/30">
-                Solo Lectura
+
+              <div className="text-xs text-slate-300 font-semibold flex flex-wrap items-center gap-2">
+                <span>
+                  Inicio: <strong className="text-emerald-400">{turnoActual.horaApertura || '--:--'}</strong>
+                </span>
+                <span>·</span>
+                <span>
+                  Duración: <strong className="text-white">{calcularDuracionTurno(turnoActual)}</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Badges compactos de quiénes están trabajando */}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1">
+                Personal:
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold border ${
+                  puestosTurnoActual.puestoMaquina.asistio &&
+                  puestosTurnoActual.puestoMaquina.trabajador
+                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                <span className="text-[10px] uppercase opacity-75">Máq:</span>
+                <strong>
+                  {puestosTurnoActual.puestoMaquina.asistio &&
+                  puestosTurnoActual.puestoMaquina.trabajador
+                    ? puestosTurnoActual.puestoMaquina.trabajador
+                    : 'Falta'}
+                </strong>
+              </span>
+
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold border ${
+                  puestosTurnoActual.puestoAnillador.asistio &&
+                  puestosTurnoActual.puestoAnillador.trabajador
+                    ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                <span className="text-[10px] uppercase opacity-75">Ani:</span>
+                <strong>
+                  {puestosTurnoActual.puestoAnillador.asistio &&
+                  puestosTurnoActual.puestoAnillador.trabajador
+                    ? puestosTurnoActual.puestoAnillador.trabajador
+                    : 'Falta'}
+                </strong>
+              </span>
+
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold border ${
+                  puestosTurnoActual.puestoEstabilizador.asistio &&
+                  puestosTurnoActual.puestoEstabilizador.trabajador
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                <span className="text-[10px] uppercase opacity-75">Est:</span>
+                <strong>
+                  {puestosTurnoActual.puestoEstabilizador.asistio &&
+                  puestosTurnoActual.puestoEstabilizador.trabajador
+                    ? puestosTurnoActual.puestoEstabilizador.trabajador
+                    : 'Falta'}
+                </strong>
               </span>
             </div>
 
-            <div className="p-5 sm:p-6 bg-amber-50/40 space-y-4">
-              <p className="text-sm sm:text-base font-semibold text-slate-800 leading-relaxed">
-                👀 <strong>Modo Consulta:</strong> Turno activo con el equipo{' '}
-                <strong className="text-amber-800">{resumenEquipoActivo}</strong>. Los controles de
-                registro están bloqueados en este dispositivo para evitar modificaciones accidentales
-                desde otros teléfonos o computadoras en planta.
-              </p>
-              <p className="text-xs sm:text-sm text-slate-600">
-                Puede supervisar en tiempo real todas las entregas parciales y métricas acumuladas en
-                el panel derecho. Si cambió de teléfono o necesita hacer un relevo de emergencia, puede
-                transferir el control a este dispositivo:
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-[11px] text-slate-400">
+              <span className="inline-flex items-center gap-1.5">
+                {esDispositivoAutorizado ? (
+                  <>
+                    <Smartphone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span className="text-emerald-300 font-semibold">
+                      Control activo en este dispositivo ({formatearFechaLegible(turnoActual.fecha)})
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span className="text-amber-300 font-semibold">
+                      Modo Consulta (Solo Lectura)
+                    </span>
+                  </>
+                )}
+              </span>
 
-              {alReclamarControlDispositivo && (
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    disabled={cargandoAccion}
-                    onClick={alReclamarControlDispositivo}
-                    className="w-full sm:w-auto min-h-[46px] px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs sm:text-sm border border-slate-700 shadow-sm transition cursor-pointer"
-                  >
-                    Reclamar control en este dispositivo
-                  </button>
-                </div>
+              {!esDispositivoAutorizado && alReclamarControlDispositivo && (
+                <button
+                  type="button"
+                  disabled={cargandoAccion}
+                  onClick={alReclamarControlDispositivo}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[11px] transition cursor-pointer"
+                >
+                  Reclamar control
+                </button>
               )}
             </div>
           </section>
-        ) : (
-          <section className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden w-full">
-            <div className="bg-slate-900 text-white px-4 sm:px-5 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <PackagePlus className="w-5 h-5 text-emerald-400 shrink-0" />
-                <h2 className="font-bold text-base sm:text-lg tracking-tight">
-                  2. Registro Parcial de Armaduras Estabilizadas
-                </h2>
+
+          {/* =====================================================================
+              SECCIÓN 2: REGISTRO PARCIAL / CONTINUO DE ARMADURAS ESTABILIZADAS
+             ===================================================================== */}
+          {enModoConsulta ? (
+            <section className="bg-white rounded-2xl shadow-md border-2 border-amber-300 overflow-hidden w-full">
+              <div className="bg-slate-900 text-white px-4 sm:px-5 py-4 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+                  <h2 className="font-bold text-base sm:text-lg tracking-tight">
+                    2. Controles de Registro Bloqueados
+                  </h2>
+                </div>
+                <span className="text-xs font-extrabold bg-amber-500/20 text-amber-300 px-3 py-1 rounded-full border border-amber-500/30">
+                  Solo Lectura
+                </span>
               </div>
-            </div>
 
-            <form onSubmit={manejarEnvioParcial} className="p-4 sm:p-5 space-y-5">
-              {/* Cantidad de Armaduras Estabilizadas + Botones Táctiles Rápidos */}
-              <div>
-                <label
-                  htmlFor="campo-cantidad-parcial"
-                  className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-600 mb-1.5"
-                >
-                  Cantidad de Armaduras Estabilizadas Pasadas *
-                </label>
-                <input
-                  id="campo-cantidad-parcial"
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  step="1"
-                  placeholder="Ingrese cantidad del lote (ej. 45)"
-                  value={cantidadParcial}
-                  disabled={turnoCerrado}
-                  onChange={(e) => setCantidadParcial(e.target.value)}
-                  required
-                  className="w-full min-h-[52px] rounded-xl border-2 border-slate-300 px-4 py-3 text-xl font-extrabold text-slate-900 placeholder:text-slate-400 placeholder:text-base placeholder:font-normal focus:border-emerald-600 focus:outline-none"
-                />
+              <div className="p-5 sm:p-6 bg-amber-50/40 space-y-4">
+                <p className="text-sm sm:text-base font-semibold text-slate-800 leading-relaxed">
+                  👀 <strong>Modo Consulta:</strong> Turno activo con el equipo{' '}
+                  <strong className="text-amber-800">{resumenEquipoActivo}</strong>. Los controles de
+                  registro están bloqueados en este dispositivo para evitar modificaciones accidentales
+                  desde otros teléfonos o computadoras en planta.
+                </p>
+                <p className="text-xs sm:text-sm text-slate-600">
+                  Puede supervisar en tiempo real todas las entregas parciales y métricas acumuladas en
+                  el panel derecho. Si cambió de teléfono o necesita hacer un relevo de emergencia, puede
+                  transferir el control a este dispositivo:
+                </p>
 
-                {/* Botonera táctil para incremento rápido en pantalla industrial */}
-                <div className="mt-3">
-                  <span className="text-xs font-bold text-slate-500 block mb-2">
-                    Suma rápida táctil (para uso con guantes):
-                  </span>
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                    {[5, 10, 25, 50, 100].map((valor) => (
-                      <button
-                        key={valor}
-                        type="button"
-                        disabled={turnoCerrado}
-                        onClick={() => sumarCantidadRapida(valor)}
-                        className="min-h-[48px] py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 border border-emerald-300 font-extrabold text-base transition cursor-pointer disabled:opacity-40"
-                      >
-                        +{valor}
-                      </button>
-                    ))}
+                {alReclamarControlDispositivo && (
+                  <div className="pt-1">
                     <button
                       type="button"
-                      disabled={turnoCerrado || !cantidadParcial}
-                      onClick={() => setCantidadParcial('')}
-                      className="min-h-[48px] py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm inline-flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
+                      disabled={cargandoAccion}
+                      onClick={alReclamarControlDispositivo}
+                      className="w-full sm:w-auto min-h-[46px] px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs sm:text-sm border border-slate-700 shadow-sm transition cursor-pointer"
                     >
-                      <RotateCcw className="w-4 h-4 shrink-0" />
-                      <span>Limpiar</span>
+                      Reclamar control en este dispositivo
                     </button>
                   </div>
+                )}
+              </div>
+            </section>
+          ) : (
+            <section className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden w-full">
+              <div className="bg-slate-900 text-white px-4 sm:px-5 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <PackagePlus className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <h2 className="font-bold text-base sm:text-lg tracking-tight">
+                    2. Registro Parcial de Armaduras Estabilizadas
+                  </h2>
                 </div>
               </div>
 
-              {/* Notas / Observaciones Opcionales */}
-              <div>
-                <label
-                  htmlFor="campo-observacion-parcial"
-                  className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-600 mb-1.5"
+              <form onSubmit={manejarEnvioParcial} className="p-4 sm:p-5 space-y-5">
+                {/* Cantidad de Armaduras Estabilizadas + Botones Táctiles Rápidos */}
+                <div>
+                  <label
+                    htmlFor="campo-cantidad-parcial"
+                    className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-600 mb-1.5"
+                  >
+                    Cantidad de Armaduras Estabilizadas Pasadas *
+                  </label>
+                  <input
+                    id="campo-cantidad-parcial"
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    step="1"
+                    placeholder="Ingrese cantidad del lote (ej. 45)"
+                    value={cantidadParcial}
+                    disabled={turnoCerrado}
+                    onChange={(e) => setCantidadParcial(e.target.value)}
+                    required
+                    className="w-full min-h-[52px] rounded-xl border-2 border-slate-300 px-4 py-3 text-xl font-extrabold text-slate-900 placeholder:text-slate-400 placeholder:text-base placeholder:font-normal focus:border-emerald-600 focus:outline-none"
+                  />
+
+                  {/* Botonera táctil para incremento rápido en pantalla industrial */}
+                  <div className="mt-3">
+                    <span className="text-xs font-bold text-slate-500 block mb-2">
+                      Suma rápida táctil (para uso con guantes):
+                    </span>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                      {[5, 10, 25, 50, 100].map((valor) => (
+                        <button
+                          key={valor}
+                          type="button"
+                          disabled={turnoCerrado}
+                          onClick={() => sumarCantidadRapida(valor)}
+                          className="min-h-[48px] py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 border border-emerald-300 font-extrabold text-base transition cursor-pointer disabled:opacity-40"
+                        >
+                          +{valor}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        disabled={turnoCerrado || !cantidadParcial}
+                        onClick={() => setCantidadParcial('')}
+                        className="min-h-[48px] py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm inline-flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40"
+                      >
+                        <RotateCcw className="w-4 h-4 shrink-0" />
+                        <span>Limpiar</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notas / Observaciones Opcionales */}
+                <div>
+                  <label
+                    htmlFor="campo-observacion-parcial"
+                    className="block text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-600 mb-1.5"
+                  >
+                    Notas u Observaciones de la Entrega (Opcional)
+                  </label>
+                  <textarea
+                    id="campo-observacion-parcial"
+                    rows="2"
+                    placeholder="Ej. Lote estabilizado completo sin contratiempos..."
+                    value={observacionParcial}
+                    disabled={turnoCerrado}
+                    onChange={(e) => setObservacionParcial(e.target.value)}
+                    className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-base font-medium text-slate-800 placeholder:text-slate-400 focus:border-emerald-600 focus:outline-none"
+                  />
+
+                  {/* Etiquetas rápidas de observación */}
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    {notasRapidas.map((nota) => (
+                      <button
+                        key={nota}
+                        type="button"
+                        disabled={turnoCerrado}
+                        onClick={() => setObservacionParcial(nota)}
+                        className="min-h-[40px] text-xs sm:text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl font-semibold transition cursor-pointer inline-flex items-center gap-1.5"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <span>{nota}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Botón de Registro de Entrega Parcial (registra hora automáticamente al enviar) */}
+                <button
+                  type="submit"
+                  disabled={turnoCerrado || cargandoAccion}
+                  className="w-full min-h-[54px] py-4 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-extrabold text-base sm:text-lg shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
                 >
-                  Notas u Observaciones de la Entrega (Opcional)
-                </label>
-                <textarea
-                  id="campo-observacion-parcial"
-                  rows="2"
-                  placeholder="Ej. Lote estabilizado completo sin contratiempos..."
-                  value={observacionParcial}
-                  disabled={turnoCerrado}
-                  onChange={(e) => setObservacionParcial(e.target.value)}
-                  className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-base font-medium text-slate-800 placeholder:text-slate-400 focus:border-emerald-600 focus:outline-none"
-                />
-
-                {/* Etiquetas rápidas de observación */}
-                <div className="mt-2.5 flex flex-wrap gap-2">
-                  {notasRapidas.map((nota) => (
-                    <button
-                      key={nota}
-                      type="button"
-                      disabled={turnoCerrado}
-                      onClick={() => setObservacionParcial(nota)}
-                      className="min-h-[40px] text-xs sm:text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl font-semibold transition cursor-pointer inline-flex items-center gap-1.5"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                      <span>{nota}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Botón de Registro de Entrega Parcial (registra hora automáticamente al enviar) */}
-              <button
-                type="submit"
-                disabled={turnoCerrado || cargandoAccion}
-                className="w-full min-h-[54px] py-4 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-extrabold text-base sm:text-lg shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
-              >
-                <PlusCircle className="w-6 h-6 shrink-0" />
-                <span>Registrar Armaduras</span>
-              </button>
-            </form>
-          </section>
-        ))}
+                  <PlusCircle className="w-6 h-6 shrink-0" />
+                  <span>Registrar Armaduras</span>
+                </button>
+              </form>
+            </section>
+          )}
+        </>
+      )}
     </div>
   );
 };

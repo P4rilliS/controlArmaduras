@@ -9,9 +9,15 @@ import {
   Clock,
   Users,
   RefreshCw,
-  DollarSign
+  DollarSign,
+  Layers,
+  Save,
+  RotateCcw
 } from 'lucide-react';
-import { obtenerDatosSupervisor } from '../servicios/apiTurnos';
+import {
+  obtenerDatosSupervisor,
+  guardarControlSinAnillar
+} from '../servicios/apiTurnos';
 import {
   exportarTurnosAExcelCSV,
   formatearFechaLegible,
@@ -63,6 +69,16 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
   const [turnoExpandidoId, setTurnoExpandidoId] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [avisoModoLocal, setAvisoModoLocal] = useState(false);
+
+  // Estados para el módulo flexible "Control de Armaduras Sin Anillar" (sin bloqueos en cascada)
+  const [turnoControlId, setTurnoControlId] = useState('');
+  const [recibidasSinAnillar, setRecibidasSinAnillar] = useState('0');
+  const [producidasMaquinaControl, setProducidasMaquinaControl] = useState('0');
+  const [dejadasSinAnillar, setDejadasSinAnillar] = useState('0');
+  const [observacionControl, setObservacionControl] = useState('');
+  const [guardandoControl, setGuardandoControl] = useState(false);
+  const [mensajeControl, setMensajeControl] = useState('');
+  const turnoControlInicializadoRef = useRef('');
 
   // Referencia mutable para el respaldo local de modo que el polling de Aplicacion.jsx
   // nunca recree callbacks ni reinicie los filtros activos del supervisor
@@ -214,6 +230,138 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
 
   const toggleDetalleTurno = (idTurno) => {
     setTurnoExpandidoId((actual) => (actual === idTurno ? null : idTurno));
+  };
+
+  // Lista de turnos ordenada cronológicamente (del más reciente al más antiguo) para sugerencias de Control Sin Anillar
+  const turnosOrdenados = useMemo(() => {
+    return [...todosLosTurnos].sort(
+      (a, b) =>
+        new Date(b.fechaApertura || b.fecha || b.createdAt || 0) -
+        new Date(a.fechaApertura || a.fecha || a.createdAt || 0)
+    );
+  }, [todosLosTurnos]);
+
+  // Calcula sugerencias para un turno específico (saldo dejado del registro anterior y máquina del turno)
+  const calcularSugerenciasControl = useCallback(
+    (idSeleccionado, lista = turnosOrdenados) => {
+      const idx = lista.findIndex((t) => String(t._id) === String(idSeleccionado));
+      if (idx === -1) {
+        return { sugerenciaRecibidas: 0, sugerenciaMaquina: 0, turnoEncontrado: null };
+      }
+      const turnoActualSel = lista[idx];
+      // Buscar el registro anterior que tenga saldo dejado sin anillar o usar el inmediatamente anterior
+      let sugerenciaRecibidas = 0;
+      for (let i = idx + 1; i < lista.length; i += 1) {
+        if (lista[i]?.controlSinAnillar?.registrado) {
+          sugerenciaRecibidas = Number(lista[i].controlSinAnillar.dejadasSinAnillar) || 0;
+          break;
+        }
+      }
+      const sugerenciaMaquina = Number(turnoActualSel.contadorMaquina) || 0;
+      return {
+        sugerenciaRecibidas,
+        sugerenciaMaquina,
+        turnoEncontrado: turnoActualSel
+      };
+    },
+    [turnosOrdenados]
+  );
+
+  // Precargar como sugerencia cuando se selecciona un turno distinto en el Control Sin Anillar
+  // (sin que el polling de 5s sobrescriba lo que el supervisor está editando)
+  const seleccionarTurnoParaControl = useCallback(
+    (idNuevo, lista = turnosOrdenados) => {
+      setTurnoControlId(idNuevo);
+      turnoControlInicializadoRef.current = idNuevo;
+      setMensajeControl('');
+      const { sugerenciaRecibidas, sugerenciaMaquina, turnoEncontrado } =
+        calcularSugerenciasControl(idNuevo, lista);
+
+      if (turnoEncontrado?.controlSinAnillar?.registrado) {
+        setRecibidasSinAnillar(
+          String(Number(turnoEncontrado.controlSinAnillar.recibidasSinAnillar) || 0)
+        );
+        setProducidasMaquinaControl(
+          String(Number(turnoEncontrado.controlSinAnillar.producidasMaquina) || 0)
+        );
+        setDejadasSinAnillar(
+          String(Number(turnoEncontrado.controlSinAnillar.dejadasSinAnillar) || 0)
+        );
+        setObservacionControl(turnoEncontrado.controlSinAnillar.observacion || '');
+      } else {
+        setRecibidasSinAnillar(String(sugerenciaRecibidas));
+        setProducidasMaquinaControl(String(sugerenciaMaquina));
+        setDejadasSinAnillar('0');
+        setObservacionControl('');
+      }
+    },
+    [calcularSugerenciasControl, turnosOrdenados]
+  );
+
+  useEffect(() => {
+    if (!turnoControlId && turnosOrdenados.length > 0) {
+      seleccionarTurnoParaControl(turnosOrdenados[0]._id, turnosOrdenados);
+    }
+  }, [turnoControlId, turnosOrdenados, seleccionarTurnoParaControl]);
+
+  // Cálculo dinámico en vivo: (Recibidas + Máquina) - Dejadas = Anilladas Reales
+  const recibidasNumVivo = Number(recibidasSinAnillar) || 0;
+  const producidasNumVivo = Number(producidasMaquinaControl) || 0;
+  const dejadasNumVivo = Number(dejadasSinAnillar) || 0;
+  const anilladasRealesVivo = recibidasNumVivo + producidasNumVivo - dejadasNumVivo;
+
+  const { sugerenciaRecibidas: sugerenciaRecibidasActual, sugerenciaMaquina: sugerenciaMaquinaActual } =
+    useMemo(
+      () => calcularSugerenciasControl(turnoControlId, turnosOrdenados),
+      [calcularSugerenciasControl, turnoControlId, turnosOrdenados]
+    );
+
+  const manejarGuardarControlSinAnillar = async (evento) => {
+    evento.preventDefault();
+    if (!turnoControlId) return;
+    setGuardandoControl(true);
+    setMensajeControl('');
+
+    const payloadControl = {
+      recibidasSinAnillar: Math.max(0, Math.round(recibidasNumVivo)),
+      producidasMaquina: Math.max(0, Math.round(producidasNumVivo)),
+      dejadasSinAnillar: Math.max(0, Math.round(dejadasNumVivo)),
+      observacion: observacionControl.trim()
+    };
+
+    try {
+      const respuesta = await guardarControlSinAnillar(
+        turnoControlId,
+        payloadControl,
+        claveSupervisor
+      );
+      if (respuesta?.turno) {
+        setTodosLosTurnos((prev) =>
+          prev.map((t) => (String(t._id) === String(turnoControlId) ? respuesta.turno : t))
+        );
+      }
+      setMensajeControl('Control Sin Anillar guardado correctamente (sin bloqueos en cascada).');
+    } catch {
+      // Respaldo local en caso de operar sin conexión activa
+      setTodosLosTurnos((prev) =>
+        prev.map((t) =>
+          String(t._id) === String(turnoControlId)
+            ? {
+                ...t,
+                controlSinAnillar: {
+                  ...payloadControl,
+                  anilladasReales: anilladasRealesVivo,
+                  registrado: true,
+                  actualizadoEn: new Date().toISOString()
+                }
+              }
+            : t
+        )
+      );
+      setMensajeControl('Control Sin Anillar actualizado en memoria local.');
+    } finally {
+      setGuardandoControl(false);
+    }
   };
 
   const primerTurnoStats = comparativaTurnos.primerTurno;
@@ -505,6 +653,177 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
       />
 
       {/* =====================================================================
+          4.5. CONTROL FLEXIBLE DE ARMADURAS SIN ANILLAR (SIN BLOQUEOS EN CASCADA)
+         ===================================================================== */}
+      <section className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden w-full">
+        <div className="bg-slate-900 text-white px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <Layers className="w-5 h-5 text-amber-400 shrink-0" />
+            <div>
+              <h3 className="font-bold text-base sm:text-lg">
+                Control de Armaduras Sin Anillar (Flexibilidad Total)
+              </h3>
+              <p className="text-xs text-slate-300">
+                Todos los valores son sugerencias 100% editables por el supervisor sin bloqueos en cascada.
+              </p>
+            </div>
+          </div>
+
+          <span className="text-xs font-extrabold bg-amber-500/20 text-amber-300 border border-amber-400/30 px-3 py-1 rounded-full">
+            Fórmula: (Recibidas + Máquina) - Dejadas = Anilladas Reales
+          </span>
+        </div>
+
+        <form onSubmit={manejarGuardarControlSinAnillar} className="p-4 sm:p-6 space-y-4">
+          {turnosOrdenados.length === 0 ? (
+            <p className="text-sm text-slate-500 italic">
+              No hay turnos registrados aún para asociar el control de armaduras sin anillar.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                {/* Selector de Turno a Auditar */}
+                <div className="lg:col-span-4">
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Turno / Jornada a Auditar
+                  </label>
+                  <select
+                    value={turnoControlId}
+                    onChange={(e) => seleccionarTurnoParaControl(e.target.value, turnosOrdenados)}
+                    className="w-full min-h-[48px] rounded-xl border-2 border-slate-300 px-3.5 py-2.5 text-sm sm:text-base font-bold text-slate-800 bg-slate-50 focus:border-amber-500 focus:outline-none cursor-pointer"
+                  >
+                    {turnosOrdenados.map((t) => (
+                      <option key={t._id} value={t._id}>
+                        {formatearFechaLegible(t.fecha)} — {t.tipoTurno} (Máq: {Number(t.contadorMaquina) || 0} | Est: {Number(t.totalEstabilizadas) || 0}
+                        {t.esProduccionInterna ? ' · Producción Interna / Sin Nómina' : ''})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 1. Recibidas Sin Anillar (100% Editable, sugerencia del último saldo dejado) */}
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <label className="text-xs font-extrabold uppercase text-slate-700">
+                      1. Recibidas Sin Anillar
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setRecibidasSinAnillar(String(sugerenciaRecibidasActual))}
+                      className="text-[11px] font-bold text-amber-700 hover:text-amber-900 inline-flex items-center gap-1 cursor-pointer"
+                      title="Restaurar sugerencia del último saldo dejado"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Sugerido: {sugerenciaRecibidasActual}
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={recibidasSinAnillar}
+                    onChange={(e) => setRecibidasSinAnillar(e.target.value)}
+                    className="w-full min-h-[48px] rounded-xl border-2 border-slate-300 bg-white px-3.5 py-2 text-lg font-black text-slate-900 focus:border-amber-500 focus:outline-none"
+                  />
+                  <span className="text-[11px] text-slate-500 block mt-1">
+                    100% editable (permite ajustar arrume físico o producción extra).
+                  </span>
+                </div>
+
+                {/* 2. Producidas por Máquina (100% Editable, sugerencia del turno) */}
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <label className="text-xs font-extrabold uppercase text-slate-700">
+                      2. Producidas por Máquina
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setProducidasMaquinaControl(String(sugerenciaMaquinaActual))}
+                      className="text-[11px] font-bold text-sky-700 hover:text-sky-900 inline-flex items-center gap-1 cursor-pointer"
+                      title="Usar contador de máquina del turno seleccionado"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Turno: {sugerenciaMaquinaActual}
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={producidasMaquinaControl}
+                    onChange={(e) => setProducidasMaquinaControl(e.target.value)}
+                    className="w-full min-h-[48px] rounded-xl border-2 border-slate-300 bg-white px-3.5 py-2 text-lg font-black text-slate-900 focus:border-amber-500 focus:outline-none"
+                  />
+                  <span className="text-[11px] text-slate-500 block mt-1">
+                    100% editable (sugiere máquina del turno o ingreso manual).
+                  </span>
+                </div>
+
+                {/* 3. Dejadas Sin Anillar (100% Editable) */}
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <label className="text-xs font-extrabold uppercase text-slate-700">
+                      3. Dejadas Sin Anillar
+                    </label>
+                    <span className="text-[11px] font-bold text-slate-500">Saldo final</span>
+                  </div>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={dejadasSinAnillar}
+                    onChange={(e) => setDejadasSinAnillar(e.target.value)}
+                    className="w-full min-h-[48px] rounded-xl border-2 border-slate-300 bg-white px-3.5 py-2 text-lg font-black text-slate-900 focus:border-amber-500 focus:outline-none"
+                  />
+                  <span className="text-[11px] text-slate-500 block mt-1">
+                    Saldo en piso que servirá de sugerencia al siguiente registro.
+                  </span>
+                </div>
+
+                {/* 4. Resultado Dinámico en Vivo: Anilladas Reales */}
+                <div className="bg-emerald-50/90 p-3.5 rounded-xl border-2 border-emerald-400 flex flex-col justify-between">
+                  <div>
+                    <span className="text-xs font-extrabold uppercase text-emerald-800 block">
+                      4. Anilladas Reales (En Vivo)
+                    </span>
+                    <p className="text-2xl sm:text-3xl font-black text-emerald-700 mt-1">
+                      {anilladasRealesVivo.toLocaleString('es-ES')}
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-bold text-emerald-800 block mt-1">
+                    ({recibidasNumVivo} + {producidasNumVivo}) - {dejadasNumVivo} ={' '}
+                    <strong>{anilladasRealesVivo}</strong>
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+                <input
+                  type="text"
+                  placeholder="Observación opcional (ej. ajuste de inventario sábado por el supervisor)..."
+                  value={observacionControl}
+                  onChange={(e) => setObservacionControl(e.target.value)}
+                  className="flex-1 min-h-[44px] rounded-xl border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-800"
+                />
+
+                <button
+                  type="submit"
+                  disabled={guardandoControl || !turnoControlId}
+                  className="min-h-[46px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 font-extrabold text-sm shadow-sm transition cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  <Save className="w-4 h-4 shrink-0" />
+                  <span>{guardandoControl ? 'Guardando...' : 'Guardar Control Sin Anillar'}</span>
+                </button>
+              </div>
+
+              {mensajeControl && (
+                <div className="bg-emerald-50 border-l-4 border-emerald-500 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-emerald-900">
+                  {mensajeControl}
+                </div>
+              )}
+            </>
+          )}
+        </form>
+      </section>
+
+      {/* =====================================================================
           5. HISTORIAL DE TURNOS (TARJETAS EJECUTIVAS EN MÓVIL/TABLET Y TABLA EN MONITORES XL)
          ===================================================================== */}
       <div className="w-full max-w-7xl mx-auto my-6">
@@ -573,6 +892,11 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                           >
                             {turno.tipoTurno}
                           </span>
+                          {turno.esProduccionInterna && (
+                            <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-extrabold bg-purple-100 text-purple-900 border border-purple-200">
+                              Producción Interna / Sin Nómina ($0.00)
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -940,15 +1264,22 @@ const PanelSupervisor = ({ claveSupervisor, turnosRespaldoLocal = [] }) => {
                               <div className="font-bold text-slate-900 whitespace-nowrap">
                                 {formatearFechaLegible(turno.fecha)}
                               </div>
-                              <span
-                                className={`mt-1 inline-block px-2.5 py-0.5 rounded-lg text-xs font-extrabold whitespace-nowrap ${
-                                  turno.tipoTurno === 'Primer Turno'
-                                    ? 'bg-amber-100 text-amber-900'
-                                    : 'bg-sky-100 text-sky-900'
-                                }`}
-                              >
-                                {turno.tipoTurno}
-                              </span>
+                              <div className="flex flex-col items-start gap-1 mt-1">
+                                <span
+                                  className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-extrabold whitespace-nowrap ${
+                                    turno.tipoTurno === 'Primer Turno'
+                                      ? 'bg-amber-100 text-amber-900'
+                                      : 'bg-sky-100 text-sky-900'
+                                  }`}
+                                >
+                                  {turno.tipoTurno}
+                                </span>
+                                {turno.esProduccionInterna && (
+                                  <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-purple-100 text-purple-900 border border-purple-200 whitespace-nowrap">
+                                    Prod. Interna ($0.00)
+                                  </span>
+                                )}
+                              </div>
                             </td>
 
                             {/* Columna 2: Horario (Inicio, Cierre y Duración en una sola línea cada uno) */}

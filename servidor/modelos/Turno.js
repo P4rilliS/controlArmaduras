@@ -72,14 +72,26 @@ const normalizarObjetoPuesto = (puestoRaw, tarifaPorDefecto) => {
 
 /**
  * Calcula el desglose de liquidación de mano de obra del turno según la regla estricta:
+ * - Si el turno está marcado como `esProduccionInterna` (Producción Interna / Sin Nómina del Supervisor):
+ *   registra la producción para estadísticas e inventario pero genera $0.00 en nómina (`totalNominaTurno = 0`).
  * - Si un trabajador NO asistió a su puesto: montoPagar = $0.00 y no se le computa el turno.
- * - Puesto Máquina presente: devenga (contadorMaquina * 0.35). Si trabajó completamente solo
- *   (sin anillador ni estabilizador presentes), se le suma también (totalEstabilizadas * 0.30).
- * - Puesto Anillador presente: devenga (totalEstabilizadas * 0.30).
- * - Puesto Estabilizador presente: devenga (totalEstabilizadas * 0.30).
+ * - Si viene SOLO el Operador de Máquina (sin anillador ni estabilizador):
+ *   * Si solo operó máquina (`totalEstabilizadas === 0`): se le liquida su producción de máquina a $0.35/ud (`concepto: 'Máquina'`).
+ *   * Si además estabilizó lotes (`totalEstabilizadas > 0`): se le suma `(contadorMaquina * 0.35) + (totalEstabilizadas * 0.30)` (`concepto: 'Máquina + Estabilizado'`).
+ * - Si viene SOLO 1 Anillador o SOLO 1 Estabilizador (sin operador de máquina):
+ *   se le liquidan únicamente las armaduras estabilizadas registradas a $0.30/ud (`concepto: 'Estabilizado'`).
  * - totalNominaTurno es la suma exacta únicamente de los puestos con asistencia confirmada.
  */
 const calcularLiquidacionDesdePuestos = (docTurno) => {
+  if (docTurno && docTurno.esProduccionInterna === true) {
+    return {
+      tarifaMaquina: TARIFA_MAQUINA,
+      tarifaEstabilizada: TARIFA_ESTABILIZADA,
+      pagosPersonal: [],
+      totalNominaTurno: 0
+    };
+  }
+
   const cantMaquina = Math.max(0, Number(docTurno.contadorMaquina) || 0);
   const cantEstabilizadas = Math.max(0, Number(docTurno.totalEstabilizadas) || 0);
 
@@ -116,7 +128,7 @@ const calcularLiquidacionDesdePuestos = (docTurno) => {
   // 1. Puesto Máquina (Encargado)
   if (maquinaPresente) {
     const trabajaCompletamenteSolo = !anilladorPresente && !estabilizadorPresente;
-    if (trabajaCompletamenteSolo) {
+    if (trabajaCompletamenteSolo && cantEstabilizadas > 0) {
       const montoSolo = Number((pagoMaquinaBase + pagoEstabilizadoBase).toFixed(2));
       pagosPersonal.push({
         nombre: pMaquina.trabajador,
@@ -384,6 +396,21 @@ const TurnoEsquema = new mongoose.Schema(
       default: '',
       trim: true
     },
+    // Bandera para turnos operados directamente por el Supervisor ("Producción Interna / Sin Nómina")
+    esProduccionInterna: {
+      type: Boolean,
+      default: false
+    },
+    // Control flexible de Armaduras Sin Anillar (sin bloqueos en cascada)
+    controlSinAnillar: {
+      recibidasSinAnillar: { type: Number, default: 0 },
+      producidasMaquina: { type: Number, default: 0 },
+      dejadasSinAnillar: { type: Number, default: 0 },
+      anilladasReales: { type: Number, default: 0 },
+      observacion: { type: String, default: '', trim: true },
+      registrado: { type: Boolean, default: false },
+      actualizadoEn: { type: Date, default: null }
+    },
     liquidacion: {
       tarifaMaquina: { type: Number, default: TARIFA_MAQUINA },
       tarifaEstabilizada: { type: Number, default: TARIFA_ESTABILIZADA },
@@ -409,7 +436,8 @@ const TurnoEsquema = new mongoose.Schema(
  * Middleware pre-validación:
  * 1. Sincroniza bidireccionalmente los 3 puestos (`puestoMaquina`, `puestoAnillador`, `puestoEstabilizador`)
  *    con los campos legados (`encargado`, `operadores`).
- * 2. Verifica que exista AL MENOS UN trabajador presente (`asistio: true`).
+ * 2. Verifica que exista AL MENOS UN trabajador presente (`asistio: true`), salvo cuando el turno
+ *    se marca como `esProduccionInterna: true` (Producción Interna / Sin Nómina del Supervisor).
  * 3. Verifica unicidad (una misma persona presente no puede ocupar dos puestos simultáneamente).
  */
 TurnoEsquema.pre('validate', function (next) {
@@ -472,11 +500,11 @@ TurnoEsquema.pre('validate', function (next) {
     .filter((item) => item.datos.asistio && item.datos.trabajador)
     .map((item) => item.datos.trabajador);
 
-  // Condición de apertura: al menos 1 trabajador presente
-  if (trabajadoresPresentes.length === 0) {
+  // Condición de apertura: al menos 1 trabajador presente, o bien turno de Producción Interna (Supervisor)
+  if (trabajadoresPresentes.length === 0 && !this.esProduccionInterna) {
     this.invalidate(
       'puestoMaquina',
-      'Debe haber al menos un trabajador presente con asistencia confirmada para abrir el turno.'
+      'Debe haber al menos un trabajador presente con asistencia confirmada para abrir el turno, o marcar "Producción Interna / Sin Nómina (Supervisor)".'
     );
   }
 
@@ -495,7 +523,9 @@ TurnoEsquema.pre('validate', function (next) {
  * Middleware pre-guardado (`pre('save')`):
  * 1. Calcula automáticamente la sumatoria física de `totalEstabilizadas`.
  * 2. Calcula al 100% la `diferencia` (merma) frente al `contadorMaquina`, sin importar inasistencias.
- * 3. Recalcula la `liquidacion` de mano de obra pagando únicamente a los puestos con asistencia confirmada.
+ * 3. Recalcula la `liquidacion` de mano de obra pagando únicamente a los puestos con asistencia confirmada
+ *    (o $0.00 cuando `esProduccionInterna` es true).
+ * 4. Si existe `controlSinAnillar` registrado, recalcula dinámicamente `anilladasReales = (recibidas + maquina) - dejadas`.
  */
 TurnoEsquema.pre('save', function (next) {
   const sumaParciales = (this.registrosParciales || []).reduce(
@@ -512,6 +542,13 @@ TurnoEsquema.pre('save', function (next) {
     this.diferencia = (Number(this.contadorMaquina) || 0) - this.totalEstabilizadas;
   } else {
     this.diferencia = 0;
+  }
+
+  if (this.controlSinAnillar && this.controlSinAnillar.registrado) {
+    const recibidas = Number(this.controlSinAnillar.recibidasSinAnillar) || 0;
+    const producidas = Number(this.controlSinAnillar.producidasMaquina) || 0;
+    const dejadas = Number(this.controlSinAnillar.dejadasSinAnillar) || 0;
+    this.controlSinAnillar.anilladasReales = recibidas + producidas - dejadas;
   }
 
   if (this.estado === 'Cerrado') {
